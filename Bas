@@ -1,1 +1,1149 @@
-sdfdfdgfdf
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Data;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
+using System.Threading;
+using System.Linq;
+using System.Dynamic;
+using System.Data.SqlClient;
+
+namespace Core
+{
+    public interface IConnectionString
+    {
+
+    }
+    public class DefaultConnectionString : IConnectionString
+    {
+        DefaultConnectionString(string name)
+        {
+
+        }
+
+    }
+    public class InventoryConnectionString : IConnectionString
+    {
+
+    }
+    public class ERPConnectionString : IConnectionString
+    {
+
+    }
+
+    public abstract class BaseSQLManager : BaseSQLManager<DefaultConnectionString>
+    {
+
+    }
+    public abstract class BaseSQLManager<T> where T : IConnectionString
+    {
+        #region Variable
+
+        internal static string connectionString
+        {
+            get
+            {
+                if (typeof(T) == typeof(InventoryConnectionString))
+                {
+                    return AppServicesHelper.Config.ConnectionString_GarmentDealB2B_Inventory;
+                }
+                else if (typeof(T) == typeof(ERPConnectionString))
+                {
+                    string ERPConnectionString = Convert.ToString(AppServicesHelper.HttpContext_Current.Items["ERPConnectionString"]);
+                    if (!UtilityWS.IsNullOrDBNullorBlank(ERPConnectionString))
+                        return Crypto.Decrypt(ERPConnectionString);
+                    else
+                        throw new Exception("ERP Connection String not set..!!");
+                }
+                else
+                    return AppServicesHelper.Config.ConnectionString_GarmentDealB2B;
+            }
+        }
+
+        public static string UserID
+        {
+            get
+            {
+                SqlConnectionStringBuilder con = new SqlConnectionStringBuilder(connectionString);
+                return con.UserID;
+            }
+        }
+        public static string InitialCatalog
+        {
+            get
+            {
+                SqlConnectionStringBuilder con = new SqlConnectionStringBuilder(connectionString);
+                return con.InitialCatalog;
+            }
+        }
+
+        static long PerformanceLogTime = 500;
+        public static bool LogAllQuery = false;
+        public static int DefaultTimeOut = 300;
+        static CultureInfo SqlServerCulture = new CultureInfo("en-GB");
+        #endregion
+
+        static BaseSQLManager()
+        {
+
+        }
+
+        #region getConnection
+        private static SqlConnection getConnection()
+        {
+            //    int ConnectionTry = 0;
+            //start:
+
+
+            try
+            {
+                SqlConnection connection = new SqlConnection(connectionString);
+                connection.Open();
+                return connection;
+            }
+            catch (Exception ex)
+            {
+                //ConnectionTry += 1;
+                //if (ConnectionTry == 5)
+                //{
+                throw;
+                //}
+                //else
+                //{
+                //    goto start;
+                //}
+            }
+        }
+        #endregion
+
+
+        #region checkConnection
+        protected static void checkConnection(SqlCommand command, int CommandTimeOut = 0)
+        {
+            command.Connection = getConnection();
+            command.CommandTimeout = CommandTimeOut;
+        }
+        #endregion
+
+        #region ExecuteDataReader
+        protected static SqlDataReader ExecuteDataReader(SqlCommand command)
+        {
+            checkConnection(command, DefaultTimeOut);
+            try
+            {
+                return command.ExecuteReader(CommandBehavior.CloseConnection);
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.htException.Add(ex, command);
+                throw;
+            }
+        }
+        #endregion
+
+        #region ExecuteDataReader
+        public static void ExecuteDataReader(SqlCommand command, ref SqlDataReader dr)
+        {
+            ExecuteDataReader(command, ref dr, false);
+        }
+        public static void ExecuteDataReader(SqlCommand command, ref SqlDataReader dr, bool blnTransaction)
+        {
+            try
+            {
+                SqlParameter returnParam = new SqlParameter();
+                returnParam.ParameterName = "@return";
+                returnParam.Direction = ParameterDirection.ReturnValue;
+                returnParam.Value = 0;
+                command.Parameters.Add(returnParam);
+
+                if (blnTransaction)
+                {
+                    if (command.Transaction == null)
+                    {
+                        checkConnection(command, DefaultTimeOut);
+                        command.Transaction = command.Connection.BeginTransaction();
+                    }
+                }
+                else
+                    checkConnection(command, DefaultTimeOut);
+
+
+
+                Stopwatch stopWatch = Stopwatch.StartNew();
+                if (blnTransaction == false)
+                    dr = command.ExecuteReader(CommandBehavior.CloseConnection);
+                else
+                    dr = command.ExecuteReader();
+
+                stopWatch.Stop();
+                if (LogAllQuery)
+                {
+                    InsertSqlCommandPerformanceLog(command, stopWatch);
+                }
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.htException.Add(ex, command);
+                throw;
+            }
+            //finally
+            //{
+            //    if (command != null)
+            //    {
+            //        if (command.Connection != null)
+            //        {
+            //            if (!blnTransaction)
+            //                if (command.Connection.State == ConnectionState.Open) command.Connection.Close();
+            //        }
+            //    }
+            //}
+        }
+
+        //protected static void ExecuteDataReader(out SqlDataReader dr, SqlCommand command)
+        //{
+        //    SqlParameter returnParam = new SqlParameter();
+        //    returnParam.ParameterName = "@return";
+        //    returnParam.Direction = ParameterDirection.ReturnValue;
+        //    returnParam.Value = 0;
+        //    command.Parameters.Add(returnParam);
+        //    checkConnection(command);
+        //    dr = command.ExecuteReader(CommandBehavior.CloseConnection);
+        //}
+        #endregion
+
+
+        #region ExecuteScaler
+        public static object ExecuteScaler(string Query)
+        {
+            SqlCommand cmd = new SqlCommand();
+            cmd.CommandText = Query;
+            cmd.CommandType = CommandType.Text;
+
+            return ExecuteScaler(cmd, false);
+        }
+        public static object ExecuteScaler(SqlCommand command)
+        {
+            return ExecuteScaler(command, false);
+        }
+        public static object ExecuteScaler(SqlCommand command, bool blnTransaction)
+        {
+            object objReturnValue = null;
+            try
+            {
+                if (blnTransaction)
+                {
+                    if (command.Transaction == null)
+                    {
+                        checkConnection(command, DefaultTimeOut);
+                        command.Transaction = command.Connection.BeginTransaction();
+                    }
+                }
+                else
+                    checkConnection(command, DefaultTimeOut);
+
+
+                objReturnValue = command.ExecuteScalar();
+            }
+            finally
+            {
+                if (command != null)
+                {
+                    if (command.Connection != null)
+                    {
+                        if (!blnTransaction)
+                            if (command.Connection.State == ConnectionState.Open) command.Connection.Close();
+                    }
+                }
+            }
+            return objReturnValue;
+        }
+        #endregion
+
+        #region ExecuteNonQuery
+        public static int ExecuteNonQuery(string Query)
+        {
+            SqlCommand cmd = new SqlCommand();
+            cmd.CommandText = Query;
+            cmd.CommandType = CommandType.Text;
+            bool Retry = true;
+            work:
+            try
+            {
+                return ExecuteNonQuery(cmd, false, DefaultTimeOut);
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("A severe error occurred on the current command. The results, if any, should be discarded") && Retry)
+                {
+                    Retry = false;
+                    goto work;
+                }
+                throw;
+            }
+        }
+        public static int ExecuteNonQuery(SqlCommand command)
+        {
+            return ExecuteNonQuery(command, false, DefaultTimeOut);
+        }
+        public static int ExecuteNonQuery(SqlCommand command, int CommandTimeout)
+        {
+            return ExecuteNonQuery(command, false, CommandTimeout);
+        }
+        public static int ExecuteNonQuery(SqlCommand command, bool blnTransaction)
+        {
+            return ExecuteNonQuery(command, blnTransaction, DefaultTimeOut);
+        }
+        public static int ExecuteNonQuery(SqlCommand command, bool blnTransaction, int CommandTimeout)
+        {
+            SqlParameter returnParam = new SqlParameter();
+            returnParam.ParameterName = "@return";
+            returnParam.Direction = ParameterDirection.ReturnValue;
+            returnParam.Value = 0;
+            command.Parameters.Add(returnParam);
+            try
+            {
+                Stopwatch stopWatch = Stopwatch.StartNew();
+                if (blnTransaction)
+                {
+                    if (command.Transaction == null)
+                    {
+                        checkConnection(command, CommandTimeout);
+                        command.Transaction = command.Connection.BeginTransaction();
+                    }
+                }
+                else
+                    checkConnection(command, CommandTimeout);
+                command.ExecuteNonQuery();
+
+                stopWatch.Stop();
+                if (LogAllQuery)
+                {
+                    InsertSqlCommandPerformanceLog(command, stopWatch);
+                }
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.htException.Add(ex, command);
+                throw;
+            }
+            finally
+            {
+                if (command != null)
+                {
+                    if (command.Connection != null)
+                    {
+                        if (!blnTransaction)
+                            if (command.Connection.State == ConnectionState.Open) command.Connection.Close();
+                    }
+                }
+            }
+            return Convert.ToInt32(command.Parameters["@return"].Value);
+        }
+        #endregion
+
+        #region HasColumn
+        public static bool HasColumn(IDataReader Reader, string ColumnName)
+        {
+            foreach (DataRow row in Reader.GetSchemaTable().Rows)
+            {
+                if (row["ColumnName"].ToString() == ColumnName)
+                    return true;
+            }
+            return false;
+        }
+        #endregion
+
+
+        #region GetField
+
+        public static String GetFieldString(IDataReader rs, String fieldname)
+        {
+            return GetField(rs, fieldname);
+        }
+        public static String GetField(IDataReader rs, String fieldname)
+        {
+            int idx = rs.GetOrdinal(fieldname);
+            if (rs.IsDBNull(idx))
+            {
+                return String.Empty;
+            }
+            return rs.GetString(idx);
+        }
+
+        #region GetSqlParameterValue
+        public static SqlParameter GetSqlParameterValue(string ParamName, SqlDbType dbType, object ParamValue, ParameterDirection ParamDirection = ParameterDirection.InputOutput, int size = 0)
+        {
+            SqlParameter parm = new SqlParameter(ParamName, dbType);
+            parm.Direction = ParamDirection;
+            parm.Value = ParamValue;
+            if (size > 0) parm.Size = size;
+            return parm;
+        }
+        #endregion
+
+        public static bool GetFieldBool(IDataReader rs, String fieldname)
+        {
+            int idx = rs.GetOrdinal(fieldname);
+            if (rs.IsDBNull(idx))
+            {
+                return false;
+            }
+
+            String s = rs[fieldname].ToString();
+
+            return (s.Equals("TRUE", StringComparison.InvariantCultureIgnoreCase) ||
+                    s.Equals("YES", StringComparison.InvariantCultureIgnoreCase) ||
+                    s.Equals("1", StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        public static String GetFieldGUID(IDataReader rs, String fieldname)
+        {
+            int idx = rs.GetOrdinal(fieldname);
+            if (rs.IsDBNull(idx))
+            {
+                return String.Empty;
+            }
+            return rs.GetGuid(idx).ToString();
+        }
+
+        public static Guid GetFieldGUID2(IDataReader rs, String fieldname)
+        {
+            int idx = rs.GetOrdinal(fieldname);
+            if (rs.IsDBNull(idx))
+            {
+                return new Guid("00000000000000000000000000000000");
+            }
+            return rs.GetGuid(idx);
+        }
+
+        public static Byte GetFieldByte(IDataReader rs, String fieldname)
+        {
+            int idx = rs.GetOrdinal(fieldname);
+            if (rs.IsDBNull(idx))
+            {
+                return 0;
+            }
+            return rs.GetByte(idx);
+        }
+        public static byte[] GetFieldBytes(IDataReader rs, String fieldname)
+        {
+            int idx = rs.GetOrdinal(fieldname);
+            if (rs.IsDBNull(idx))
+            {
+                return null;
+            }
+            long DataLength = rs.GetBytes(idx, 0, null, 0, 0);
+            byte[] data = new byte[DataLength];
+            rs.GetBytes(idx, 0, data, 0, (int)DataLength);
+            return data;
+        }
+
+
+        public static int GetFieldInt(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return 0;
+                }
+                return rs.GetInt32(idx);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        public static Int64 GetFieldInt64(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return 0;
+                }
+                return rs.GetInt64(idx);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        protected static int GetFieldTinyInt(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return 0;
+                }
+                int ni;
+                System.Int32.TryParse(rs[idx].ToString(), NumberStyles.Integer, Thread.CurrentThread.CurrentUICulture, out ni); // use default locale setting
+                return ni;
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        public static object GetFieldObject(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return null;
+                }
+                return rs.GetValue(idx);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        protected static long GetFieldLong(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return 0;
+                }
+                return rs.GetInt64(idx);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        protected static Single GetFieldSingle(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return 0.0F;
+                }
+                return (Single)rs.GetDouble(idx); // SQL server seems to fail the GetFloat calls, so we have to do this
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        protected static Double GetFieldDouble(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return 0.0F;
+                }
+                return rs.GetDouble(idx);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        protected static Decimal GetFieldDecimal(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return System.Decimal.Zero;
+                }
+                return rs.GetDecimal(idx);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        public static DateTime GetFieldDateTime(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return System.DateTime.MinValue;
+                }
+                return Convert.ToDateTime(rs[idx], SqlServerCulture);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        protected static DateTime? GetFieldDateTimeNullable(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return null;
+                }
+                return Convert.ToDateTime(rs[idx], SqlServerCulture);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+
+        protected static TimeSpan? GetFieldTimeSpan(IDataReader rs, String fieldname)
+        {
+            try
+            {
+                int idx = rs.GetOrdinal(fieldname);
+                if (rs.IsDBNull(idx))
+                {
+                    return null;
+                }
+                return ((SqlDataReader)rs).GetTimeSpan(idx);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(fieldname + " - " + ex.Message, ex);
+            }
+        }
+        #endregion
+
+        #region ForceCloseConnection
+        public static void ForceCloseConnection(SqlCommand command)
+        {
+
+            if (command != null)
+            {
+                if (command.Connection != null)
+                {
+                    if (command.Connection.State == ConnectionState.Open)
+                    {
+                        command.Connection.Close();
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region ExecuteDataset
+        public static DataSet ExecuteDataset(string query)
+        {
+            return ExecuteDataset(query, DefaultTimeOut);
+        }
+        public static DataSet ExecuteDataset(string query, int CommandTimeOut)
+        {
+            SqlCommand command = new SqlCommand();
+            command.CommandText = query;
+            command.CommandType = CommandType.Text;
+            return ExecuteDataset(command, false, CommandTimeOut);
+        }
+
+        public static DataSet ExecuteDataset(SqlCommand cmd)
+        {
+            return ExecuteDataset(cmd, false, DefaultTimeOut);
+        }
+
+        public static DataSet ExecuteDataset(SqlCommand cmd, int CommandTimeOut)
+        {
+            return ExecuteDataset(cmd, false, CommandTimeOut);
+        }
+        public static DataSet ExecuteDataset(SqlCommand cmd, bool blnTransaction)
+        {
+            return ExecuteDataset(cmd, blnTransaction, DefaultTimeOut);
+        }
+        public static DataSet ExecuteDataset(SqlCommand cmd, bool blnTransaction, int CommandTimeOut)
+        {
+            DataSet ds = new DataSet();
+            try
+            {
+                Stopwatch stopWatch = Stopwatch.StartNew();
+                if (blnTransaction)
+                {
+                    if (cmd.Transaction == null)
+                    {
+                        checkConnection(cmd, CommandTimeOut);
+                        cmd.Transaction = cmd.Connection.BeginTransaction();
+                    }
+                }
+                else
+                    checkConnection(cmd, CommandTimeOut);
+
+                SqlDataAdapter Da = new SqlDataAdapter(cmd);
+                Da.Fill(ds);
+
+                stopWatch.Stop();
+                if (LogAllQuery)
+                {
+                    InsertSqlCommandPerformanceLog(cmd, stopWatch);
+                }
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.htException.Add(ex, cmd);
+                throw;
+            }
+            finally
+            {
+                if (cmd != null)
+                {
+                    if (cmd.Connection != null)
+                    {
+                        if (!blnTransaction)
+                            if (cmd.Connection.State == ConnectionState.Open) cmd.Connection.Close();
+                    }
+                }
+            }
+            return ds;
+        }
+
+        #endregion
+
+        #region ExecuteDataTable
+        public static DataTable ExecuteDataTable(string Query)
+        {
+            SqlCommand cmd = new SqlCommand();
+            cmd.CommandText = Query;
+            cmd.CommandType = CommandType.Text;
+            return ExecuteDataTable(cmd, false, DefaultTimeOut);
+        }
+        public static DataTable ExecuteDataTable(SqlCommand command)
+        {
+            return ExecuteDataTable(command, false, DefaultTimeOut);
+        }
+        public static DataTable ExecuteDataTable(SqlCommand command, int CommandTimeOut)
+        {
+            return ExecuteDataTable(command, false, CommandTimeOut);
+        }
+
+        public static DataTable ExecuteDataTable(SqlCommand command, bool blnTransaction)
+        {
+            return ExecuteDataTable(command, blnTransaction, DefaultTimeOut);
+        }
+        public static DataTable ExecuteDataTable(SqlCommand command, bool blnTransaction, int CommandTimeOut)
+        {
+            SqlParameter returnParam = new SqlParameter();
+            returnParam.ParameterName = "@return";
+            returnParam.Direction = ParameterDirection.ReturnValue;
+            returnParam.Value = 0;
+            command.Parameters.Add(returnParam);
+            SqlDataAdapter Da;
+            try
+            {
+                Stopwatch stopWatch = Stopwatch.StartNew();
+                if (blnTransaction)
+                {
+                    if (command.Transaction == null)
+                    {
+                        checkConnection(command, CommandTimeOut);
+                        command.Transaction = command.Connection.BeginTransaction();
+                    }
+                }
+                else
+                    checkConnection(command, CommandTimeOut);
+
+                DataTable dt = new DataTable();
+                Da = new SqlDataAdapter(command);
+                Da.Fill(dt);
+
+                stopWatch.Stop();
+                if (LogAllQuery)
+                {
+                    InsertSqlCommandPerformanceLog(command, stopWatch);
+                }
+                return dt;
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.htException.Add(ex, command);
+                throw;
+            }
+            finally
+            {
+                if (command != null)
+                {
+                    if (command.Connection != null)
+                    {
+                        if (!blnTransaction)
+                            if (command.Connection.State == ConnectionState.Open) command.Connection.Close();
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region InsertSqlCommandPerformanceLog
+        public class PerformanceLogData
+        {
+            public Stopwatch watch { get; set; }
+            public string CommandText { get; set; }
+            public string commandType { get; set; }
+            public string parameter { get; set; }
+            public string CommandResponse { get; set; }
+        }
+
+        static void InsertSqlCommandPerformanceLog(SqlCommand cmdInput, Stopwatch watch)
+        {
+
+            InsertSqlCommandPerformanceLog(cmdInput, watch, connectionString);
+        }
+        public static void InsertSqlCommandPerformanceLog(SqlCommand cmdInput, Stopwatch watch, string connectionString)
+        {
+            if (cmdInput.CommandText.Contains("insert into tmpSQLCommandPerformance"))
+                return;
+
+            StringBuilder parameter = new StringBuilder();
+            try
+            {
+                foreach (SqlParameter sp in cmdInput.Parameters)
+                {
+                    try
+                    {
+                        if (sp.ParameterName != "@return")
+                        {
+                            string value = Convert.ToString(sp.Value);
+                            if (value != null && value == "\0")
+                            {
+                                value = " ";
+                            }
+                            if (sp.Value is DateTime && sp.Value != null && UtilityWS.IsDate(sp.Value))
+                                parameter.AppendLine(((parameter.Length == 0) ? "" : " , ") + string.Format("{0} = '{1}'", sp.ParameterName, UtilityWS.ConvertToDateTime(sp.Value).ToString("MM/dd/yyyy HH:mm:ss")));
+                            else
+                                parameter.AppendLine(((parameter.Length == 0) ? "" : " , ") + string.Format("{0} = '{1}'", sp.ParameterName, value));
+                        }
+                    }
+                    catch (Exception exxx)
+                    { }
+                }
+            }
+            catch (Exception exxxx)
+            {
+                parameter.Append("error-" + exxxx.Message);
+            }
+
+            PerformanceLogData data = new PerformanceLogData() { watch = watch, CommandText = cmdInput.CommandText, commandType = cmdInput.CommandType.ToString(), parameter = parameter.ToString() };
+
+            System.Threading.Thread thread = new Thread(new ParameterizedThreadStart(InsertSqlCommandPerformanceLog));
+            thread.Name = "threadInsertSqlCommandPerformanceLog";
+            thread.IsBackground = true;
+            //thread.InitThread();
+            thread.Start(data);
+        }
+
+        public static void InsertSqlCommandPerformanceLog(object data)
+        {
+            try
+            {
+                PerformanceLogData d = data as PerformanceLogData;
+                Stopwatch watch = d.watch;
+
+
+                SqlCommand cmd = new SqlCommand();
+                cmd.CommandText = @"insert into tmpSQLCommandPerformance([CommandText],[CommandType],[RequiredTime],[AddDate],[ComputerName],[DataBaseName],[CommandParameter],[RequiredMilliSeconds],[IsTransfered],[CommandResponse])
+	                            values (@CommandText,@CommandType,@RequiredTime,getdate(),@ComputerName,@DataBaseName,@CommandParameter,@RequiredMilliSeconds,0,@CommandResponse)";
+
+                cmd.Parameters.AddWithValue("@CommandText", d.CommandText);
+                cmd.Parameters.AddWithValue("@CommandType", d.commandType.ToString());
+                cmd.Parameters.AddWithValue("@RequiredTime", watch.Elapsed);
+                cmd.Parameters.AddWithValue("@RequiredMilliSeconds", watch.ElapsedMilliseconds);
+                cmd.Parameters.AddWithValue("@ComputerName", Environment.MachineName);
+                cmd.Parameters.AddWithValue("@DataBaseName", InitialCatalog);
+
+                cmd.Parameters.AddWithValue("@CommandParameter", d.parameter);
+                if (!UtilityWS.IsNullOrDBNullorBlank(d.CommandResponse))
+                    cmd.Parameters.AddWithValue("@CommandResponse", d.CommandResponse);
+                else
+                    cmd.Parameters.AddWithValue("@CommandResponse", "");
+
+                BaseSQLManager<DefaultConnectionString>.ExecuteNonQuery(cmd);
+                //ExecuteNonQuery(cmd);
+            }
+            catch (Exception ex)
+            {
+                ErrorMgmt.AddError(ex, "InsertSqlCommandPerformanceLog - " + InitialCatalog);
+            }
+        }
+        #endregion
+
+        #region DataReaderToObject
+        public static void DataReaderToObject(SqlDataReader dr, object obj)
+        {
+            Hashtable htColumns = new Hashtable();
+            for (int i = 0; i < dr.FieldCount; i++)
+            {
+                htColumns.Add(dr.GetName(i).ToUpper(), i);
+            }
+
+            foreach (var prop in obj.GetType().GetProperties())
+            {
+                if (prop.CanWrite && htColumns.ContainsKey(prop.Name.ToUpper()))
+                {
+
+                    int idx = Convert.ToInt32(htColumns[prop.Name]);
+
+                    if (prop.PropertyType == typeof(Int32))
+                    {
+                        prop.SetValue(obj, GetFieldInt(dr, prop.Name), null);
+                    }
+                    else if (prop.PropertyType == typeof(string))
+                    {
+                        prop.SetValue(obj, GetField(dr, prop.Name), null);
+                    }
+                    else if (prop.PropertyType == typeof(Int64))
+                    {
+                        prop.SetValue(obj, GetFieldInt64(dr, prop.Name), null);
+                    }
+                    else if (prop.PropertyType == typeof(DateTime))
+                    {
+                        prop.SetValue(obj, GetFieldDateTime(dr, prop.Name), null);
+                    }
+                    else if (prop.PropertyType == typeof(double))
+                    {
+                        prop.SetValue(obj, GetFieldDouble(dr, prop.Name), null);
+                    }
+                    else if (prop.PropertyType == typeof(bool))
+                    {
+                        prop.SetValue(obj, GetFieldBool(dr, prop.Name), null);
+                    }
+
+                }
+            }
+        }
+        #endregion
+
+       public delegate void AfterDataReaderToDictionaryConvertEventHandler(Dictionary<string, object> obj);
+        #region DataReaderToObject
+        public static List<Dictionary<string, object>> DataReaderToDictionaryList(SqlDataReader dr)
+        {
+            return DataReaderToDictionaryList(dr, null);
+        }
+        public static List<Dictionary<string, object>> DataReaderToDictionaryList(SqlDataReader dr, AfterDataReaderToDictionaryConvertEventHandler callback)
+        {
+            List<Dictionary<string, object>> lst = new List<Dictionary<string, object>>();
+            while (dr.Read())
+            {
+                Dictionary<string, object> obj = new Dictionary<string, object>();
+                for (int i = 0; i < dr.FieldCount; i++)
+                {
+                    string Keys = dr.GetName(i);
+                    if (!obj.ContainsKey(Keys))
+                        obj.Add(Keys, dr.GetValue(i));
+                }
+                if (callback != null)
+                    callback.Invoke(obj);
+
+                lst.Add(obj);
+            }
+            return lst;
+        }
+        #endregion
+
+        //#region DataReaderToObject
+        //public static List<Dictionary<string, object>> DataReaderToDictionaryList(SqlDataReader dr)
+        //{
+        //    List<Dictionary<string, object>> lst = new List<Dictionary<string, object>>();
+        //    while (dr.Read())
+        //    {
+        //        Dictionary<string, object> obj = new Dictionary<string, object>();
+        //        for (int i = 0; i < dr.FieldCount; i++)
+        //        {
+        //            obj.Add(dr.GetName(i), dr.GetValue(i));
+        //        }
+        //        lst.Add(obj);
+        //    }
+        //    return lst;
+        //}
+        //#endregion
+        //public delegate void AfterDataReaderToDictionaryConvertEventHandler(Dictionary<string, object> obj);
+
+        //public static List<Dictionary<string, object>> DataReaderToDictionaryList(SqlDataReader dr, AfterDataReaderToDictionaryConvertEventHandler callback)
+        //{
+        //    List<Dictionary<string, object>> lst = new List<Dictionary<string, object>>();
+        //    while (dr.Read())
+        //    {
+        //        Dictionary<string, object> obj = new Dictionary<string, object>();
+        //        for (int i = 0; i < dr.FieldCount; i++)
+        //        {
+        //            string Keys = dr.GetName(i);
+        //            if (!obj.ContainsKey(Keys))
+        //                obj.Add(Keys, dr.GetValue(i));
+        //        }
+        //        if (callback != null)
+        //            callback.Invoke(obj);
+
+        //        lst.Add(obj);
+        //    }
+        //    return lst;
+        //}
+
+
+        #region ExecuteBulkCopy
+        public static void ExecuteBulkCopy(SqlCommand cmd, string tableName, DataTable table)
+        {
+            if (tableName == "")
+                throw new Exception("TableName not found");
+
+            if (cmd.Transaction == null)
+            {
+                checkConnection(cmd);
+                cmd.Transaction = cmd.Connection.BeginTransaction();
+            }
+
+            SqlBulkCopy sqlBulkCopyFrom;
+
+            sqlBulkCopyFrom = new SqlBulkCopy(cmd.Connection, SqlBulkCopyOptions.CheckConstraints, cmd.Transaction);
+            sqlBulkCopyFrom.BulkCopyTimeout = 0;
+            sqlBulkCopyFrom.NotifyAfter = 10;
+
+            string temptable = CREATE_TEMP_TABLE(cmd, tableName);
+            sqlBulkCopyFrom.ColumnMappings.Clear();
+            foreach (DataColumn col in table.Columns)
+            {
+                sqlBulkCopyFrom.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+            }
+            sqlBulkCopyFrom.DestinationTableName = "#" + temptable;
+            try
+            {
+                sqlBulkCopyFrom.WriteToServer(table);
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("The given ColumnMapping"))
+                {
+                    string ColumnMappingMsg = GetTableColumnsInfo(tableName, cmd, table);
+                    if (!string.IsNullOrEmpty(ColumnMappingMsg))
+                        throw new Exception(ColumnMappingMsg);
+                }
+                throw;
+            }
+            finally
+            {
+                sqlBulkCopyFrom.Close();
+            }
+        }
+        #endregion
+
+        #region CREATE_TEMP_TABLE
+        static string CREATE_TEMP_TABLE(SqlCommand cmd, string tablename)
+        {
+            //Creating Temporary table
+
+            string tempTableName = "temp_" + tablename;
+            try
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandText = "IF OBJECT_ID('tempdb..#" + tempTableName + "') IS NOT NULL DROP TABLE #" + tempTableName;
+                cmd.ExecuteNonQuery();
+
+                cmd.CommandText = " SELECT TOP(0)* INTO #" + tempTableName + " FROM " + tablename;
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+            return tempTableName;
+        }
+        #endregion
+
+        #region GetTableColumnsInfo
+        static string GetTableColumnsInfo(string tableName, SqlCommand cmd, DataTable dtData)
+        {
+            string msg = "";
+            try
+            {
+                DataTable dtTable1 = new DataTable();
+
+                DataTable dt = new DataTable();
+                cmd.CommandText = "exec sp_Columns " + tableName;
+                cmd.CommandType = System.Data.CommandType.Text;
+                SqlDataAdapter adp = new SqlDataAdapter(cmd);
+                adp.Fill(dtTable1);
+
+                string UnknownField1 = "";
+                foreach (DataRow dr in dtTable1.Rows)
+                {
+                    string localColumnName = dr["COLUMN_NAME"].ToString();
+                    bool found = false;
+                    foreach (DataColumn column in dtData.Columns)
+                    {
+                        string webColumnName = column.ColumnName;
+                        if (string.Compare(localColumnName, webColumnName, false) == 0)
+                        {
+                            found = true;
+                            break; // TODO: might not be correct. Was : Exit For
+                        }
+                    }
+                    if (!found)
+                    {
+                        UnknownField1 += Environment.NewLine + localColumnName;
+                    }
+                }
+
+                string UnknowField2 = "";
+                foreach (DataColumn column in dtData.Columns)
+                {
+                    string WebColumnName = column.ColumnName;
+                    bool found = false;
+                    foreach (DataRow drLocal in dtTable1.Rows)
+                    {
+                        string localColumnName = drLocal["COLUMN_NAME"].ToString();
+                        if (string.Compare(localColumnName, WebColumnName) == 0)
+                        {
+                            found = true;
+                            break; // TODO: might not be correct. Was : Exit For
+                        }
+                    }
+                    if (!found)
+                    {
+                        UnknowField2 += Environment.NewLine + WebColumnName;
+                    }
+                }
+
+                //if (!string.IsNullOrEmpty(UnknownField1))
+                //{
+                //    msg += Environment.NewLine + "Following columns not found in Source Table : " + UnknownField1;
+                //}
+
+                if (!string.IsNullOrEmpty(UnknowField2))
+                {
+                    msg += Environment.NewLine + "Following columns not found in Destination Table : " + UnknowField2;
+                }
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+            if (msg != "")
+            {
+                return tableName + " - " + msg;
+            }
+            else
+                return "";
+        }
+        #endregion
+    }
+}
+
