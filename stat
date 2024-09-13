@@ -1,0 +1,188 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Core;
+using IHostingEnvironment = Microsoft.AspNetCore.Hosting.IHostingEnvironment;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using MyRetailer.Middlewares;
+using Microsoft.Extensions.FileProviders;
+using System.IO;
+using Newtonsoft.Json.Serialization;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Options;
+using MyRetailer.AppCode;
+using Microsoft.OpenApi.Models;
+
+namespace MyRetailer
+{
+    public class Startup
+    {
+        public Startup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
+
+        public IConfiguration Configuration { get; }
+
+        // This method gets called by the runtime. Use this method to add services to the container.
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddDistributedMemoryCache();
+            services.AddSession();
+            if (Configuration.GetValue<bool>("MyAppSettings:IsLocal") == true)
+            {
+                services.AddSwaggerGen(config =>
+                {
+                    config.SwaggerDoc("webapi-v1", new OpenApiInfo { Title = "My Retailer Web API", Version = "v1" });
+                    config.SwaggerDoc("mobileapi-v1", new OpenApiInfo { Title = "My Retailer Mobile API", Version = "v1" });
+
+                    config.OperationFilter<MyHeaderFilter>();
+                    // Filter to apply different Swagger documents based on route
+                    config.DocInclusionPredicate((docName, apiDesc) =>
+                    {
+                        if (docName == "webapi-v1")
+                        {
+                            return apiDesc.RelativePath.StartsWith("WebApi");
+                        }
+                        else if (docName == "mobileapi-v1")
+                        {
+                            return apiDesc.RelativePath.StartsWith("api");
+                        }
+                        return false;
+                    });
+                });
+            }
+            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+
+            //services.Configure<CookiePolicyOptions>(options =>
+            //{
+            //    // This lambda determines whether user consent for non-essential cookies is needed for a given request.
+            //    options.CheckConsentNeeded = context => true;
+            //    options.MinimumSameSitePolicy = SameSiteMode.None;
+            //});
+            services.AddCors(options =>
+            {
+                options.AddDefaultPolicy(
+                      builder =>
+                      {
+                          builder.AllowAnyOrigin()
+                                 .AllowAnyHeader()
+                                 .AllowAnyMethod();
+                      });
+
+                options.AddPolicy("AllowAllHeaders",
+                      builder =>
+                      {
+                          builder.AllowAnyOrigin()
+                                 .AllowAnyHeader()
+                                 .AllowAnyMethod();
+                      });
+            });
+            IFileProvider physicalProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"));
+            services.AddSingleton<IFileProvider>(physicalProvider);
+
+
+            services.AddMvc()
+                    .AddJsonOptions(options => options.SerializerSettings.ContractResolver = new DefaultContractResolver());
+
+            services.AddMvc()
+                    .AddJsonOptions(options => options.SerializerSettings.NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore);
+
+
+            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            // Register the IOptions object
+            services.Configure<MyAppSettings>(Configuration.GetSection(nameof(MyAppSettings)));
+
+            //Explicitly register the settings object by delegating to the IOptions object so that it can be accessed globally via AppServicesHelper.
+            services.AddSingleton(resolver => resolver.GetRequiredService<IOptionsMonitor<MyAppSettings>>().CurrentValue);
+
+            services.Configure<FormOptions>(x =>
+            {
+                x.ValueLengthLimit = 268435456;
+                x.MultipartBodyLengthLimit = 268435456;
+                x.MultipartHeadersLengthLimit = 268435456;
+            }
+            );
+        }
+
+        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseExceptionHandler("/Login/Error");
+                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+                app.UseHsts();
+            }
+            if (Configuration.GetValue<bool>("MyAppSettings:IsLocal") == true)
+            {
+                app.UseSwagger();
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/webapi-v1/swagger.json", "My Retailer Web API v1");
+                    c.SwaggerEndpoint("/swagger/mobileapi-v1/swagger.json", "My Retailer Mobile API v1");
+                    c.RoutePrefix = "swagger"; // Set the Swagger UI at the application's root
+                });
+
+            }
+            AppServicesHelper.Services = app.ApplicationServices;
+            app.UseHttpsRedirection();
+            app.UseStaticFiles();
+            app.UseMiddleware();
+            app.UseCookiePolicy();
+            app.UseCors(x => x
+                        .AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader());
+            app.UseSession();
+            app.UseMvc();
+            app.UseMvc(routes =>
+            {
+                routes.MapAreaRoute(
+                  name: "",
+                  areaName: "Admin",
+                      template: "{Areas=Admin}/{controller=Login}/{action=Index}/{id?}"
+                );
+                routes.MapRoute(
+                  name: "",
+                  template: "{controller=CouponTemplate}/{action=CouponCodeCustomer}"
+                );
+                routes.MapRoute(
+                  name: "",
+                  template: "{controller=Referral}/{action=Referral}"
+                );
+                //routes.MapAreaRoute(
+                //  name: "LoginAdmin",
+                //  areaName: "LoginAdmin",
+                //      template: "{Areas=Admin}/{controller=Login}/{action=Index}/{id?}"
+                //);
+                //routes.MapAreaRoute(
+                //    name: "JewelDealB2B",
+                //    areaName: "JewelDealB2B",
+                //    template: "JewelDealB2B/{controller=Login}/{action=Index}/{id?}"
+                //);
+            });
+            //app.UseMvc(routes =>
+            //{
+            //    //routes.MapAreaRoute(
+            //    //  name: "default",
+            //    //  areaName: "Admin",
+            //    //      template: "",
+            //    //      defaults: new { Controller = "Login", Action = "TempFoloder" }
+            //    //);
+
+            //});
+        }
+    }
+}
