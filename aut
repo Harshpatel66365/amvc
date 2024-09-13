@@ -1,0 +1,168 @@
+using MyRetailer;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc.Filters;
+using System.Threading;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Core;
+using System.Web;
+
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+public class AuthorizeAttribute : Attribute, IAuthorizationFilter
+{
+    UserTypes[] Roles;
+    public AuthorizeAttribute(params UserTypes[] roles)
+    {
+        this.Roles = roles; //string.Join(",", roles.Select(r => Enum.GetName(r.GetType(), r)));
+    }
+    public void OnAuthorization(AuthorizationFilterContext context)
+    {
+        Thread.CurrentThread.CurrentUICulture = new System.Globalization.CultureInfo("en-IN");
+
+        Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("en-IN");
+        Thread.CurrentThread.CurrentCulture.DateTimeFormat.DateSeparator = "/";
+        Thread.CurrentThread.CurrentCulture.DateTimeFormat.ShortDatePattern = "dd/MM/yyyy";
+
+        if (context.HttpContext.Request.Path.ToString().ToLower().StartsWith("/api/"))
+        {
+            UserTypes userType = UserTypes.None;
+            var user = (Entity.Masters.mstUserEntity)context.HttpContext.Items["CurrentUser"];
+
+            var Appuser = (Entity.Masters.mstCustomerEntity)context.HttpContext.Items["CurrentCustomer"];
+
+            var WebAppuser = (Entity.Dto.WebAPI.LoggenVendorDetailStore)context.HttpContext.Items["loggenVendorobj"];
+
+            if (user == null && Appuser == null)
+            {
+                UnAuthorizedResult(context);
+            }
+            else
+
+            {
+                if (this.Roles.Length > 0)
+                {
+                    if (user != null)
+                        userType = (UserTypes)user.UserTypeID;
+                    else if (Appuser != null)
+                        userType = (UserTypes)Appuser.AuthCustomerUserType;
+                    else if (WebAppuser != null)
+                        userType = (UserTypes)WebAppuser.UserTypeID;
+
+                    //UserTypes userType = (UserTypes)user.UserTypeID;
+                    if (!this.Roles.Contains(userType))
+                    {
+                        UnAuthorizedResult(context);
+                    }
+                }
+            }
+        }
+        else if (context.HttpContext.Request.Path.ToString().ToLower().StartsWith("/myretailer/"))
+        {
+            var UserTypeID = UtilityWS.ConvertToInt32(context.HttpContext.Session.GetString("UserTypeID"));
+            var VendorID = UtilityWS.ConvertToInt64(context.HttpContext.Session.GetString("VendorID"));
+            var AddressBookID = UtilityWS.ConvertToInt64(context.HttpContext.Session.GetString("AddressBookID"));
+            var CustomerID = UtilityWS.ConvertToInt64(context.HttpContext.Session.GetString("CustomerID"));
+
+
+            if (VendorID == 0 || UserTypeID == 0)
+            {
+                UnAuthenticatedWebResult(context);
+            }
+            else
+            {
+                if (this.Roles.Length > 0)
+                {
+                    UserTypes userType = (UserTypes)UserTypeID;
+                    if (!this.Roles.Contains(userType))
+                    {
+                        UnAuthorizedWebResult(context);
+                    }
+                }
+            }
+        }
+        else if (context.HttpContext.Request.Path.ToString().ToLower().StartsWith("/webapi/"))
+        {
+            UserTypes userType = UserTypes.None;
+
+            var WebAppuser = (Entity.Dto.WebAPI.LoggenVendorDetailStore)context.HttpContext.Items["loggenVendorobj"];
+
+            if (WebAppuser == null)
+            {
+                UnAuthorizedResult(context);
+            }
+            else
+
+            {
+                if (this.Roles.Length > 0)
+                {
+                    if (WebAppuser != null)
+                        userType = (UserTypes)WebAppuser.UserTypeID;
+
+                    //UserTypes userType = (UserTypes)user.UserTypeID;
+                    if (!this.Roles.Contains(userType))
+                    {
+                        UnAuthorizedResult(context);
+                    }
+                }
+            }
+        }
+        else
+        {
+
+            CookieOptions option = new CookieOptions();
+            option.HttpOnly = true;
+            option.Secure = true;
+            option.Path = "/";
+            option.Expires = DateTime.Now.AddYears(5);
+            if (!UtilityWS.IsNullOrDBNullorBlank(context.HttpContext.Request.Query["IsFromSoftware"]))
+                context.HttpContext.Response.Cookies.Append("IsFromSoftware", context.HttpContext.Request.Query["IsFromSoftware"].ToString().ToLower(), option);
+
+
+            var UserTypeID = UtilityWS.ConvertToInt32(context.HttpContext.Session.GetString("UserTypeID"));
+            var VendorID = UtilityWS.ConvertToInt64(context.HttpContext.Session.GetString("VendorID"));
+            var IsActive = UtilityWS.ConvertToBoolean(context.HttpContext.Session.GetString("IsActive"));
+
+            if (VendorID == 0 || UserTypeID == 0)
+            {
+                UnAuthenticatedResult(context);
+            }
+            else
+            {
+                if (this.Roles.Length > 0)
+                {
+                    UserTypes userType = (UserTypes)UserTypeID;
+                    if (!this.Roles.Contains(userType))
+                    {
+                        UnAuthorizedResult(context);
+                    }
+                }
+                if (IsActive == false)
+                {
+                    context.Result = new JsonResult(new { message = "Hosting Expire...." }) { StatusCode = StatusCodes.Status423Locked };
+                }
+            }
+        }
+    }
+
+    void UnAuthorizedResult(AuthorizationFilterContext context)
+    {
+        context.Result = new JsonResult(new { message = "Unauthorized" }) { StatusCode = StatusCodes.Status401Unauthorized };
+    }
+    void UnAuthenticatedWebResult(AuthorizationFilterContext context)
+    {
+        context.Result = new RedirectResult("~/myretailer/Login/Index");
+    }
+    void UnAuthenticatedResult(AuthorizationFilterContext context)
+    {
+        string ReturnURL = context.HttpContext.Request.Path.ToString().ToLower() + context.HttpContext.Request.QueryString.ToString();
+
+        context.Result = new RedirectResult("~/Admin/Login/Index?ReturnURL=" + HttpUtility.UrlEncode(ReturnURL) + " ");
+    }
+    void UnAuthorizedWebResult(AuthorizationFilterContext context)
+    {
+        context.Result = new JsonResult(new { message = "Unauthorized" }) { StatusCode = StatusCodes.Status401Unauthorized };
+    }
+}
