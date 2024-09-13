@@ -1,0 +1,129 @@
+        static string CheckFileExist(string FilePath, int Width, int Height)
+        {
+            if (System.IO.File.Exists(BaseDirectory + FilePath))
+            {
+                if (AppServicesHelper.Config.IsLocal == true || Width == -1)
+                {
+                    return string.Format(@"{0}", FilePath.Replace(@"\", @"/"));
+                }
+                else
+                {
+                    System.IO.FileInfo finfo = new System.IO.FileInfo(BaseDirectory + FilePath);
+                    return string.Format(@"/thumb/{1}x{2}/{0}{3}", finfo.LastWriteTime.Ticks, Width, Height, FilePath.Replace(@"\", @"/"));
+                }
+            }
+            else
+                return "";
+        }
+
+
+        public static string GetWebMenuImageURL(string ImageName, Int64? VendorID)
+        {
+            //string FilePath = @"\Images\VendorLogo\" + ImageName;
+            string OriginalPath = $"/VendorAssets/{VendorID}/WebMenu/{ImageName}";
+            return CheckFileExist(OriginalPath, 600, 600);
+        }
+
+
+
+using Microsoft.VisualBasic;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Data;
+using System.Diagnostics;
+
+namespace Core
+{
+    public class Messages
+    {
+        public static string GetRequiredField(string FieldName)
+        {
+            return string.Format("{0} field cannot be empty", FieldName);
+        }
+
+        public static string InsufficentRights()
+        {
+            return string.Format("You does not have sufficient permission to perform this action." + Environment.NewLine + "Please contact to your administrator.");
+        }
+        public static string DataVersionMissMatch()
+        {
+            return string.Format("This voucher already saved by another user. You Can't modify.");
+        }
+
+        public static string ShowErrorOccurred()
+        {
+            return "Something went wrong while processing your request.Please try again..!!";
+        }
+
+        public static string ShowRequiredFieldValidator(string Name)
+        {
+            return Name + " is required";
+        }
+
+        public static string UserBlocked()
+        {
+            return "User Blocked.";
+        }
+        public static string SMSSendFailed()
+        {
+            return "SMS sending failed..!!";
+        }
+    }
+}
+
+
+
+
+
+
+
+
+using System;
+using System.Collections.Generic;
+using System.Runtime.Serialization;
+using System.Text;
+
+namespace Core
+{
+    public abstract class APIResultBase
+    {
+        public int? ErrorCode = null;
+        public bool HasError = false;
+
+        //[DataMember(EmitDefaultValue = false)]
+        public bool? IsLoggedIn = null;
+
+        public List<string> Messages = null;
+
+        public void AddErrorMessage(string message)
+        {
+            if (Messages == null)
+                Messages = new List<string>();
+
+            this.Messages.Add(message);
+            this.HasError = true;
+        }
+        public void AddMessage(string message)
+        {
+            if (Messages == null)
+                Messages = new List<string>();
+
+            this.Messages.Add(message);
+            this.HasError = true;
+        }
+
+        public void AddInfoMessage(string message)
+        {
+            if (Messages == null)
+                Messages = new List<string>();
+
+            this.Messages.Add(message);
+            this.HasError = false;
+        }
+        public APIResultBase()
+        {
+            this.Messages = new List<string>();
+        }
+    }
+}
