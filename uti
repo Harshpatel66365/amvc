@@ -1,0 +1,664 @@
+using Microsoft.AspNetCore.Http;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.Text;
+using System.Web;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using System.Data.OleDb;
+
+namespace Core
+{
+    public static class UtilityWS
+    {
+        static bool ShowOriginalError = true;
+        static UtilityWS()
+        {
+            // ShowOriginalError = System.IO.File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\originalerror.txt");
+        }
+        #region HandleError
+        public static void HandleError(APIResultBase result, Exception ex, string MethodName, string SupportMessage = "")
+        {
+            result.HasError = true;
+            if (result.Messages != null)
+                result.Messages.Clear();
+
+            if (ex is SqlException && ShowOriginalError == false)
+            {
+                SqlException sqlEx = (SqlException)ex;
+                if (sqlEx.Errors.Count > 0)
+                {
+                    int ErrorNumber = sqlEx.Errors[0].Number;
+                    if (ErrorNumber == 547)
+                        result.AddMessage(string.Format("Your action can't perform because it's used by one or more data", SupportMessage));
+                    else if (ErrorNumber == 2601)
+                        result.AddMessage(string.Format("Your action can't perform because it's create duplicate value", SupportMessage));
+                    else
+                        result.AddMessage(Messages.ShowErrorOccurred());
+                }
+            }
+            else
+            {
+                if (ShowOriginalError == false)
+                    result.AddMessage(Messages.ShowErrorOccurred());
+                else
+                    result.AddMessage(ex.Message);
+            }
+            AddError(ex, MethodName, SupportMessage);
+        }
+
+        #endregion
+
+        #region AddError
+        #region AddError
+        public static void AddError(Exception ex, string MethodName, string SupportMessage = "")
+        {
+            string extra = "";
+            extra = "MethodName : " + MethodName + Environment.NewLine;
+            extra += "SupportMessage : " + SupportMessage + Environment.NewLine;
+
+            //if (CurrentDevice != null)
+            //{
+            //    extra += "Device ID : " + CurrentDevice.DeviceID.ToString() + Environment.NewLine;
+            //}
+
+            //extra += "Error IP : " + GetClientIP() + Environment.NewLine;
+            //extra += "PostedValues : " + GetPostedValues();
+
+            string ErrorMsg = ex.Message;
+            string ErrorStackTrace = LoadError(ex);
+            string Body = ErrorMsg + Environment.NewLine + ErrorStackTrace + extra;
+
+            ErrorMgmt.AddError(ex, extra);
+            // EmailClient.SendEmail("do-not-reply@alphaebarcode.com", "AlphaError-GSotWh_Extreme WS", "DSMFlj#5468sd", "mail.alphaebarcode.com", 25, false, "developer@alphaebarcode.com", "Error in GSoftWhExWS", Body.ToString().Replace("\n", "</br>"));
+        }
+        #endregion
+
+        //#region ReadHeader
+        //public static void ReadHeader()
+        //{
+        //    System.ServiceModel.Web.WebOperationContext ctx = System.ServiceModel.Web.WebOperationContext.Current;
+        //    if (ctx.IncomingRequest.Headers["did"] != null)
+        //    {
+        //        string request_header_value1 = ctx.IncomingRequest.Headers["did"].ToString();
+        //    }
+        //}
+        //#endregion
+
+        //#region GetClientIP
+        //public static string GetClientIP()
+        //{
+        //    string ip = ControllerBase.Request.HttpContext.Connection.RemoteIpAddress;
+        //    return ip;
+        //}
+        //#endregion
+
+        //#region GetPostedValues
+        //public static string GetPostedValues()
+        //{
+        //    OperationContext context = OperationContext.Current;
+        //    Message m = context.RequestContext.RequestMessage;
+        //    return m.ToString();
+        //}
+        //#endregion
+
+        #region LoadError
+        public static string LoadError(Exception objError)
+        {
+            StringBuilder lasterror = new StringBuilder();
+            if (objError != null)
+            {
+                if (objError.Message != null)
+                {
+                    lasterror.AppendLine("Message:");
+                    lasterror.AppendLine(objError.Message);
+                    lasterror.AppendLine();
+                }
+
+                if (objError.InnerException != null)
+                {
+                    lasterror.AppendLine("InnerException:");
+                    lasterror.AppendLine(objError.InnerException.ToString());
+                    lasterror.AppendLine();
+                }
+
+                if (objError.Source != null)
+                {
+                    lasterror.AppendLine("Source:");
+                    lasterror.AppendLine(objError.Source);
+                    lasterror.AppendLine();
+                }
+
+                if (objError.StackTrace != null)
+                {
+                    lasterror.AppendLine("StackTrace:");
+                    lasterror.AppendLine(objError.StackTrace);
+                    lasterror.AppendLine();
+                }
+            }
+            return lasterror.ToString();
+        }
+        #endregion
+        #endregion
+
+        #region IsNullOrEmpty
+        public static bool IsNullOrEmpty(string value)
+        {
+            if (value == null)
+                return true;
+            if (string.IsNullOrEmpty(value))
+                return true;
+            if (value.Trim() == "")
+                return true;
+            return false;
+        }
+        #endregion
+
+
+        #region Excel Functions
+
+        public static T ToObject<T>(this DataRow dataRow)
+where T : new()
+        {
+            T item = new T();
+            foreach (DataColumn column in dataRow.Table.Columns)
+            {
+                if (dataRow[column] != DBNull.Value)
+                {
+                    PropertyInfo prop = item.GetType().GetProperty(column.ColumnName);
+                    if (prop != null)
+                    {
+                        object result = Convert.ChangeType(dataRow[column], prop.PropertyType);
+                        prop.SetValue(item, result, null);
+                        continue;
+                    }
+                    else
+                    {
+                        FieldInfo fld = item.GetType().GetField(column.ColumnName);
+                        if (fld != null)
+                        {
+                            object result = Convert.ChangeType(dataRow[column], fld.FieldType);
+                            fld.SetValue(item, result);
+                        }
+                    }
+                }
+            }
+            return item;
+        }
+        public static DataTable ReadExcelFile(string path)
+        {
+            using (OleDbConnection conn = new OleDbConnection())
+            {
+
+                try
+                {
+
+
+                    DataTable dt = new DataTable();
+                    string Import_FileName = path;
+                    string fileExtension = Path.GetExtension(Import_FileName);
+
+
+                    if (fileExtension == ".xls")
+                        conn.ConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + Import_FileName + ";" + "Extended Properties='Excel 8.0;HDR=YES;'";
+                    if (fileExtension == ".xlsx")
+                        conn.ConnectionString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + Import_FileName + ";" + "Extended Properties='Excel 12.0 Xml;HDR=YES;'";
+
+
+                    using (OleDbCommand comm = new OleDbCommand())
+                    {
+                        if (conn.State == ConnectionState.Open)
+                            conn.Close();
+                        conn.Open();
+                        DataTable dtSheet = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, new object[] { null, null, null, "TABLE" });
+
+                        comm.CommandText = string.Format("Select * from [{0}]", dtSheet.Rows[0]["Table_Name"]);
+                        comm.Connection = conn;
+                        using (OleDbDataAdapter da = new OleDbDataAdapter())
+                        {
+                            da.SelectCommand = comm;
+                            da.Fill(dt);
+
+                            return dt;
+
+                        }
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    throw ex;
+                }
+                finally
+                {
+                    if (conn.State == ConnectionState.Open)
+                        conn.Close();
+                }
+            }
+
+        }
+
+        #endregion
+
+
+        //#region ReadHeader
+        //public static string ReadHeader(string key)
+        //{
+        //    System.ServiceModel.Web.WebOperationContext ctx = System.ServiceModel.Web.WebOperationContext.Current;
+        //    if (ctx.IncomingRequest.Headers[key] != null)
+        //    {
+        //        return ctx.IncomingRequest.Headers[key].ToString();
+        //    }
+        //    return "";
+        //}
+        //#endregion
+
+        public static string LogFileName = string.Empty;
+        public readonly static string ErrorLogDirectory = AppDomain.CurrentDomain.BaseDirectory + "\\log\\";
+        public static string ErrorLogFileName
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(LogFileName))
+                    LogFileName = "WSLog " + DateTime.Now.Ticks.ToString() + " .txt";
+                return LogFileName;
+            }
+        }
+
+        static object SyncObject = new object();
+        public static void WriteLog(string log, string fname = "")
+        {
+            try
+            {
+                if (!System.IO.File.Exists(AppDomain.CurrentDomain.BaseDirectory + "\\debug.dbg"))
+                {
+                    return;
+                }
+
+                lock (SyncObject)
+                {
+                    if ((!Directory.Exists(ErrorLogDirectory)))
+                    {
+                        Directory.CreateDirectory(ErrorLogDirectory);
+                    }
+                    StreamWriter writer = default(StreamWriter);
+                    string FileName = (fname == "") ? ErrorLogFileName : fname;
+                    writer = new StreamWriter(ErrorLogDirectory + FileName, true);
+                    writer.WriteLine(DateTime.Now.ToString() + " - " + log);
+                    writer.Close();
+                    writer.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+
+            }
+            finally
+            {
+
+            }
+        }
+
+
+        #region PropertySet
+        public static void PropertySet(object p, string propName, object value)
+        {
+            Type t = p.GetType();
+            PropertyInfo info = t.GetProperty(propName);
+            if (info == null)
+                return;
+            if (!info.CanWrite)
+                return;
+            if (!UtilityWS.IsNullOrDBNull(value) && value is DateTime && info.PropertyType == typeof(string))
+            {
+                info.SetValue(p, UtilityWS.ConvertToDateTime(value).ToString("dd/MM/yyyy"), null);
+                return;
+            }
+            else if ((value is string) == false && info.PropertyType == typeof(string))
+            {
+                info.SetValue(p, value.ToString(), null);
+                return;
+            }
+
+            info.SetValue(p, value, null);
+        }
+        #endregion
+
+        #region PropertyGet
+        public static object PropertyGet(object p, string propName)
+        {
+            Type t = p.GetType();
+            PropertyInfo info = t.GetProperty(propName);
+
+            if (info == null)
+                return null;
+            if (!info.CanRead)
+                return null;
+
+            return info.GetValue(p);
+        }
+        #endregion
+
+        #region FieldGet
+        public static object FieldGet(object p, string FieldName)
+        {
+            Type t = p.GetType();
+            FieldInfo info = t.GetField(FieldName);
+
+            if (info == null)
+                return null;
+
+            return info.GetValue(p);
+        }
+        #endregion
+
+        #region IsNullOrDBNull
+        /// <summary>
+        /// Determines whether [is null or database null] [the specified value].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if [is null or database null] [the specified value]; otherwise, <c>false</c>.</returns>
+        public static bool IsNullOrDBNull(object value)
+        {
+            if (Convert.IsDBNull(value))
+            {
+                return true;
+            }
+            else if (value == null)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region IsNullOrDBNullorBlank
+        /// <summary>
+        /// Determines whether [is null or database nullor blank] [the specified value].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if [is null or database nullor blank] [the specified value]; otherwise, <c>false</c>.</returns>
+        public static bool IsNullOrDBNullorBlank(object value)
+        {
+            if (Convert.IsDBNull(value))
+            {
+                return true;
+            }
+            else if (value == null)
+            {
+                return true;
+            }
+            else if (string.IsNullOrEmpty(Convert.ToString(value)))
+                return true;
+            else if (value == "")
+                return true;
+            else
+            {
+                return false;
+            }
+        }
+        #endregion
+
+
+        #region ConvertToDateTime
+        /// <summary>
+        /// Converts to date time.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>DateTime.</returns>
+        /// <exception cref="Exception"></exception>
+        public static DateTime ConvertToDateTime(object value)
+        {
+            try
+            {
+                return Convert.ToDateTime(value); //uses the current Thread's culture
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(string.Format("Invalid date '{0}'", value));
+            }
+        }
+        #endregion
+
+        /// <summary>
+        /// Gets the name of the file.
+        /// </summary>
+        /// <param name="FileName">Name of the file.</param>
+        /// <returns>System.String.</returns>
+        public static string GetFileName(string FileName)
+        {
+            string strtext = "";
+            strtext = Regex.Replace(FileName, @"<(.|\n)*?>", string.Empty);
+            strtext = strtext.Replace("\r", "-");
+            strtext = strtext.Replace("\\", "-");
+            strtext = strtext.Replace("/", "-");
+            strtext = strtext.Replace(":", "-");
+            strtext = strtext.Replace("'", "-");
+            strtext = strtext.Replace("\"", "-");
+            strtext = strtext.Replace("?", "-");
+            strtext = strtext.Replace("|", "-");
+            strtext = strtext.Replace("<", "-");
+            strtext = strtext.Replace(">", "-");
+            strtext = strtext.Replace("\n", "-");
+            strtext = strtext.Replace("&", "-");
+            strtext = strtext.Replace("&nbsp;", "-");
+            strtext = strtext.Replace(" ", "-");
+            strtext = strtext.Replace(".", "-");
+            strtext = strtext.Replace("*", "-");
+            strtext = strtext.Replace("#", "-");
+            strtext = strtext.Replace("%", "-");
+            return strtext;
+        }
+
+        public static int ConvertToInt32(object Value)
+        {
+            try
+            {
+                if (Value == null)
+                    return 0;
+
+                return Convert.ToInt32(Value);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        public static long ConvertToInt64(object Value)
+        {
+            try
+            {
+                if (Value == null)
+                    return 0;
+
+                return Convert.ToInt64(Value);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        public static double ConvertToDouble(object Value, int decimalPlaces = 0)
+        {
+            double Amt = 0;
+            try
+            {
+                if (Value == null)
+                    return Math.Round(Amt, decimalPlaces);
+
+                Amt = Convert.ToDouble(Value);
+            }
+            catch
+            {
+
+            }
+            return Math.Round(Amt, decimalPlaces);
+        }
+
+
+        public static decimal ConvertToDecimal(object Value, int decimalPlaces = 0)
+        {
+            decimal Amt = 0;
+            try
+            {
+                if (Value == null)
+                    return Math.Round(Amt, decimalPlaces);
+
+                Amt = Convert.ToDecimal(Value);
+            }
+            catch
+            {
+
+            }
+            return Math.Round(Amt, decimalPlaces);
+        }
+
+        public static bool ConvertToBoolean(object Value)
+        {
+            try
+            {
+                if (Value == null)
+                    return false;
+                return Convert.ToBoolean(Value);
+            }
+            catch
+            {
+                return false;
+            }
+
+        }
+
+        public static string GetSQLDateFromDDMMYYYY(string Date)
+        {
+            if (!string.IsNullOrEmpty(Date))
+            {
+                try
+                {
+                    Date = Date.Split('/')[2] + "-" + Date.Split('/')[1] + "-" + Date.Split('/')[0];
+                }
+                catch
+                {
+                    Date = null;
+                }
+            }
+            return Date;
+        }
+
+        public static DateTime IndianTimeNow
+        {
+            get
+            {
+                return DateTime.UtcNow.AddMinutes(330);
+            }
+        }
+
+        public static List<int> GetListByFromToRange(int From, int To)
+        {
+            List<int> lst = new List<int>();
+            for (int i = From; i <= To; i++)
+                lst.Add(i);
+
+            return lst;
+        }
+        public static string AccessDeniedMsg = "Access Denied!!! You are not authorized to perform this Operation.";
+
+
+        public static string ReplaceText(string Text, object parameters)
+        {
+            if (parameters != null)
+            {
+                foreach (var prop in parameters.GetType().GetProperties())
+                {
+                    string propname = prop.Name.ToLower();
+                    if (propname.EndsWith("wt") || propname.EndsWith("weight"))
+                    {
+                        Text = Text.Replace("[" + prop.Name + "]", UtilityWS.ConvertToDouble(prop.GetValue(parameters, null), 3).ToString("0.000"));
+                    }
+                    else if (propname.EndsWith("amt") || propname.EndsWith("amount"))
+                    {
+                        Text = Text.Replace("[" + prop.Name + "]", UtilityWS.ConvertToDouble(prop.GetValue(parameters, null), 0).ToString("0"));
+                    }
+                    else if (prop.GetType() == typeof(DateTime))
+                    {
+                        if (UtilityWS.IsDate(prop.GetValue(parameters, null)))
+                            Text = Text.Replace("[" + prop.Name + "]", UtilityWS.ConvertToDateTime(prop.GetValue(parameters, null)).ToString("dd/MM/yyyy"));
+                        else
+                            Text = Text.Replace("[" + prop.Name + "]", "");
+                    }
+                    else
+                        Text = Text.Replace("[" + prop.Name + "]", Convert.ToString(prop.GetValue(parameters, null)));
+                }
+            }
+            return Text;
+        }
+
+        #region IsDate
+        /// <summary>
+        /// Determines whether the specified value is date.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if the specified value is date; otherwise, <c>false</c>.</returns>
+        public static bool IsDate(object value)
+        {
+            try
+            {
+                if (IsNullOrDBNull(value))
+                    return false;
+
+                DateTime dt;
+                bool result = DateTime.TryParse(Convert.ToString(value), out dt);
+                if (result)
+                {
+                    if (dt < (new DateTime(1800, 1, 1)))
+                    {
+                        return false;
+                    }
+                    else
+                        return true;
+                }
+                else
+                    return false;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+
+        public static string StringFirstLetterofEvertWord(string word, int CountCharacter = 0)
+        {
+            StringBuilder strBuilder = new StringBuilder();
+            String[] strArray = word.Split(' ');
+            foreach (string str in strArray)
+            {
+                if (str != "")
+                    strBuilder.Append(str[0].ToString().ToUpper());
+            }
+            if (CountCharacter > 0 && strBuilder.Length > CountCharacter)
+            {
+                strBuilder.Remove(CountCharacter, strBuilder.Length - CountCharacter);
+            }
+            return strBuilder.ToString();
+        }
+        #endregion
+
+        public static bool VoucherSeriesB(string TranType)
+        {
+            string[] strTranType = new string[] { "U", "V", "W", "X", "Y", "Z" };
+            if (strTranType.Contains(TranType))
+                return true;
+            return false;
+
+        }
+    }
+}
