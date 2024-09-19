@@ -1,0 +1,67 @@
+ALTER FUNCTION [dbo].[fn_AppendNonZeroValue]
+(
+	@value bigint,
+	@String varchar(max)
+)
+RETURNS varchar(max)
+AS
+BEGIN
+	-- Declare the return variable here
+	DECLARE @ResultVar varchar(max)
+
+	if(@value = 0)
+	begin
+		set @ResultVar  = ''
+	end
+	else
+	begin
+		set @ResultVar = replace(@String,'{0}', cast(@value as varchar(255)))
+	end
+	
+	RETURN @ResultVar
+
+END
+
+
+GO
+
+ALTER FUNCTION [dbo].[fn_AppendNonBlankValue]
+(
+	@value nvarchar(max),
+	@String varchar(max)
+)
+RETURNS nvarchar(max)
+AS
+BEGIN
+	-- Declare the return variable here
+	DECLARE @ResultVar nvarchar(max)
+
+	if(isnull(@value,'') = '')
+	begin
+		set @ResultVar  = ''
+	end
+	else
+	begin
+		set @ResultVar = replace(@String,'{0}',@value)
+	end
+	
+	RETURN @ResultVar
+
+END
+GO
+
+ALTER FUNCTION [dbo].[fn_GetQuotedString]
+(
+	@CommaSeperateValue nvarchar(max)
+)
+RETURNS nvarchaR(max)
+AS
+BEGIN
+	-- Declare the return variable here
+	DECLARE @ResultVar nvarchar(max) 
+
+	SELECT @ResultVar = Coalesce(@ResultVar  + ',','') + '''' + rtrim(ltrim(VALUE)) + '''' FROM dbo.fn_split(@CommaSeperateValue, ',')
+	
+	RETURN @ResultVar
+END
+GO
