@@ -1,0 +1,21 @@
+        private ActionResult RedireURL()
+        {
+            if (HttpContext.Request.Query.Count > 0)
+            {
+                string URL = HttpContext.Request.Query["ReturnURL"].ToString().ToLower();
+                if (URL != "")
+                {
+                    string NEWURL = HttpUtility.UrlDecode(URL);
+                    return Redirect(NEWURL);
+                }
+                else
+                    return RedirectToAction("Index", "DashBoard");
+            }
+            else
+            {
+                if (!UtilityWS.IsNullOrDBNullorBlank(Request.Cookies["IsFromSoftware"]))
+                    return RedirectToAction("Index", "Chat");
+                return RedirectToAction("Index", "DashBoard");
+            }
+
+        }
