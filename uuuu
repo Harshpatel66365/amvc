@@ -1,0 +1,3283 @@
+using Microsoft.VisualBasic;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Data;
+using System.Diagnostics;
+using System.Windows.Forms;
+using System.Data.SqlClient;
+using System.IO;
+using DevExpress.XtraGrid.Views.Grid;
+using DevExpress.XtraEditors;
+using System.Drawing;
+using AlpDevLibrary;
+using System.Text.RegularExpressions;
+using DevExpress.XtraBars.Ribbon;
+using DevExpress.XtraGrid.Columns;
+using System.Xml.Serialization;
+using System.Data.OleDb;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using DevExpress.XtraGrid.Views.Grid.ViewInfo;
+using System.Linq;
+using System.Text;
+using DevExpress.XtraPivotGrid;
+using DevExpress.XtraGrid.Views.Layout;
+using System.Runtime.InteropServices;
+using DevExpress.XtraGrid.Views.BandedGrid;
+using System.Globalization;
+using Microsoft.Win32;
+using System.Reflection;
+using DevExpress.XtraReports.UI;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Management;
+using DevExpress.XtraLayout;
+using DevExpress.XtraEditors.Repository;
+using System.IO.Compression;
+using Goheer.EXIF;
+using System.Net.NetworkInformation;
+using System.Web.Script.Serialization;
+using System.Configuration;
+using System.Net;
+using System.Runtime.Serialization.Formatters.Binary;
+
+namespace Common
+{
+    public class Utility : Utility<DefaultConnectionString>
+    {
+
+    }
+    public class Utility<T> where T : IConnectionString
+    {
+        #region Veriables
+        static string _UserLayoutDirectory = AppDomain.CurrentDomain.BaseDirectory + "\\UserLayout\\";
+        public static string UserLayoutDirectory
+        {
+            get
+            {
+                if (!System.IO.Directory.Exists(_UserLayoutDirectory))
+                    System.IO.Directory.CreateDirectory(_UserLayoutDirectory);
+                return _UserLayoutDirectory;
+            }
+            set
+            {
+                _UserLayoutDirectory = value;
+            }
+        }
+        #endregion
+
+        #region ConvertToDateTime
+        /// <summary>
+        /// Converts to date time.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>DateTime.</returns>
+        /// <exception cref="Exception"></exception>
+        public static DateTime ConvertToDateTime(object value)
+        {
+            try
+            {
+                if (!Utility.IsNullOrDBNullorBlank(value))
+                    return Convert.ToDateTime(value); //uses the current Thread's culture
+                else
+                    return new DateTime();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(string.Format("Invalid date '{0}'", value));
+            }
+        }
+        #endregion
+
+        #region ConvertToDouble
+        /// <summary>
+        /// Converts to double.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>System.Double.</returns>
+        public static double ConvertToDouble(object value)
+        {
+            try
+            {
+                double output = 0;
+
+
+                if (IsNullOrDBNullorBlank(value))
+                    return 0;
+
+                if (value is Int32 || value is Int64 || value is double || value is Decimal || value is float || value is Single || value is Int16)
+                {
+                    output = Convert.ToDouble(value);
+                }
+                else
+                {
+                    bool isNumeric = Double.TryParse(Convert.ToString(value), out output);
+                }
+                if (double.IsInfinity(output))
+                    output = 0;
+
+                if (Double.IsNaN(output))
+                    output = 0;
+
+                return output;
+            }
+            catch (Exception)
+            {
+                if (ExtremeVeriables.IsDevelopmentDB)
+                    throw;
+
+                return 0;
+            }
+        }
+        #endregion
+
+        #region StringToDateTime
+        /// <summary>
+        /// Strings to date time.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>DateTime.</returns>
+        /// <exception cref="Exception"></exception>
+        public static DateTime StringToDateTime(string value)
+        {
+            try
+            {
+                return Convert.ToDateTime(value);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(string.Format("Invalid date '{0}'", value));
+            }
+        }
+        #endregion
+
+        #region ConvertToInt
+        /// <summary>
+        /// Converts to int.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>System.Int32.</returns>
+        public static int ConvertToInt(object value)
+        {
+            try
+            {
+                if (IsNullOrDBNullorBlank(value))
+                    return 0;
+
+                if (value is Enum)
+                {
+                    return Convert.ToInt32(value);
+                }
+                if (value is Int32 || value is Int64 || value is double || value is Decimal || value is float || value is Single || value is Int16)
+                    return Convert.ToInt32(value);
+
+                if (IsNumeric(value))
+                    return Convert.ToInt32(ConvertToDouble(value));
+
+                Int32 output = 0;
+                bool isNumeric = Int32.TryParse(Convert.ToString(value), out output);
+                return output;
+            }
+            catch (Exception)
+            {
+                if (ExtremeVeriables.IsDevelopmentDB || ServerName.OriginalSQLPort > 0)
+                    throw;
+
+                return 0;
+            }
+        }
+        #endregion
+
+        #region ConvertToInt64
+        /// <summary>
+        /// Converts to int64.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Int64.</returns>
+        public static Int64 ConvertToInt64(object value)
+        {
+
+            try
+            {
+                if (IsNullOrDBNullorBlank(value))
+                    return 0;
+
+                if (value is Int32 || value is Int64 || value is double || value is Decimal || value is float || value is Single || value is Int16)
+                    return Convert.ToInt64(value);
+
+                Int64 output = 0;
+                bool isNumeric = Int64.TryParse(Convert.ToString(value), out output);
+                return output;
+            }
+            catch (Exception)
+            {
+                if (ExtremeVeriables.IsDevelopmentDB)
+                    throw;
+
+                return 0;
+            }
+        }
+        #endregion
+
+        #region ConvertToDecimal
+        /// <summary>
+        /// Converts to decimal.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>System.Decimal.</returns>
+        public static decimal ConvertToDecimal(object value)
+        {
+            try
+            {
+                if (IsNullOrDBNullorBlank(value))
+                    return 0;
+
+                if (value is Int32 || value is Int64 || value is double || value is Decimal || value is float || value is Single || value is Int16)
+                    return Convert.ToDecimal(value);
+
+
+
+                decimal output = 0;
+                bool isNumeric = Decimal.TryParse(Convert.ToString(value), out output);
+                return output;
+            }
+            catch (Exception)
+            {
+                if (ExtremeVeriables.IsDevelopmentDB)
+                    throw;
+
+                return 0;
+            }
+        }
+        #endregion
+
+        #region ConvertToBoolean
+        /// <summary>
+        /// Converts to boolean.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Boolean.</returns>
+        public static Boolean ConvertToBoolean(object value)
+        {
+            try
+            {
+                if (IsNullOrDBNullorBlank(value))
+                    return false;
+                if (Convert.ToString(value) == "1")
+                    return true;
+                else if (Convert.ToString(value) == "0")
+                    return false;
+
+                return Convert.ToBoolean(value);
+            }
+            catch (Exception ex)
+            {
+                if (ExtremeVeriables.IsDevelopmentDB)
+                    throw;
+
+                return false;
+            }
+        }
+        #endregion
+
+
+        #region ConvertToTimeSpan
+        /// <summary>
+        /// Converts To Time Span.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>TimeSpan.</returns>
+        /// <exception cref="Exception"></exception>
+        public static TimeSpan ConvertToTimeSpan(object value)
+        {
+            try
+            {
+                return TimeSpan.Parse(Convert.ToString(value)); //uses the current Thread's culture
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(string.Format("Invalid Time Span '{0}'", value));
+            }
+        }
+        #endregion
+
+
+        #region FirstUpper
+        /// <summary>
+        /// Title Case String
+        /// </summary>
+        /// <param name="str">The string.</param>
+        /// <returns>System.String.</returns>
+        public static string FirstUpper(string str)
+        {
+            System.Globalization.CultureInfo c = new System.Globalization.CultureInfo("en-us", true);
+            System.Globalization.TextInfo t = c.TextInfo;
+            return t.ToTitleCase(str.ToLower());
+        }
+        public static string TitleCase(string input)
+        {
+            StringBuilder strBuilder = new StringBuilder();
+            string Word = "";
+            bool IsUpper = true;
+
+            foreach (Char c in input)
+            {
+                if (c == ' ')
+                {
+                    if (!IsUpper)
+                        strBuilder.Append(Common.Utility.FirstUpper(Word));
+                    else
+                        strBuilder.Append(Word);
+                    strBuilder.Append(c);
+                    Word = "";
+                    IsUpper = true;
+                }
+                else
+                {
+                    Word = Word + c;
+                    if (IsUpper == true && Char.IsUpper(c) == false)
+                        IsUpper = false;
+                }
+            }
+            if (!IsUpper)
+                strBuilder.Append(Common.Utility.FirstUpper(Word));
+            else
+                strBuilder.Append(Word);
+
+            return strBuilder.ToString();
+        }
+        #endregion
+
+        #region Alert
+        /// <summary>
+        /// Alerts the error.
+        /// </summary>
+        /// <param name="msg">The MSG.</param>
+        /// <param name="title">The title.</param>
+        public static void AlertError(string msg, string title = "Error")
+        {
+            //if (ExtremeVeriables.SpeackAllAlerts) SpeechText(msg);
+            DevExpress.XtraEditors.XtraMessageBox.AllowHtmlText = true;
+
+            if (ExtremeVeriables.DoNotShowAnyAlert)
+            {
+                Common.Utility.WriteLog(title + Environment.NewLine + msg, "alerts.txt");
+            }
+            else
+            {
+                DevExpress.XtraEditors.XtraMessageBox.Show("<size=12>" + msg + "</size>", Application.ProductName + " - " + title, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Alerts the information.
+        /// </summary>
+        /// <param name="msg">The MSG.</param>
+        /// <param name="title">The title.</param>
+        public static void AlertInfo(string msg, string title = "Info")
+        {
+            if (ExtremeVeriables.SpeakAllAlerts) SpeechText(msg);
+            DevExpress.XtraEditors.XtraMessageBox.AllowHtmlText = true;
+
+
+            if (ExtremeVeriables.DoNotShowAnyAlert)
+            {
+                Common.Utility.WriteLog(title + Environment.NewLine + msg, "alerts.txt");
+            }
+            else
+            {
+                DevExpress.XtraEditors.XtraMessageBox.Show("<size=12>" + msg + "</size>", Application.ProductName + " - " + title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        /// <summary>
+        /// Alerts the warning.
+        /// </summary>
+        /// <param name="msg">The MSG.</param>
+        /// <param name="title">The title.</param>
+        public static void AlertWarning(string msg, string title = "Warning")
+        {
+            if (ExtremeVeriables.SpeakAllAlerts) SpeechText(msg);
+            DevExpress.XtraEditors.XtraMessageBox.AllowHtmlText = true;
+
+            if (ExtremeVeriables.DoNotShowAnyAlert)
+            {
+                Common.Utility.WriteLog(title + Environment.NewLine + msg, "alerts.txt");
+            }
+            else
+            {
+                DevExpress.XtraEditors.XtraMessageBox.Show("<size=12>" + msg + "</size>", Application.ProductName + " - " + title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        /// <summary>
+        /// Alerts the Quations
+        /// </summary>
+        /// <param name="msg">The MSG.</param>
+        /// <param name="title">The title.</param>
+        public static DialogResult AlertQuestion(string msg, string title, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxDefaultButton defaultButton)
+        {
+            if (ExtremeVeriables.SpeakAllAlerts) SpeechText(msg);
+            DevExpress.XtraEditors.XtraMessageBox.AllowHtmlText = true;
+
+            if (ExtremeVeriables.DoNotShowAnyAlert)
+            {
+                Common.Utility.WriteLog(title + Environment.NewLine + msg, "alerts.txt");
+                return DialogResult.Yes;
+            }
+            else
+            {
+                return DevExpress.XtraEditors.XtraMessageBox.Show("<size=12>" + msg + "</size>", title, buttons, icon, defaultButton);
+            }
+        }
+
+        /// <summary>
+        /// Alerts the foreign key error.
+        /// </summary>
+        /// <param name="TableName">Name of the table.</param>
+        /// <param name="title">The title.</param>
+        public static void AlertForeignKeyError(string TableName, string title = "Already Used")
+        {
+            if (ExtremeVeriables.SpeakAllAlerts) SpeechText(string.Format("You can not add or delete. Foreign Key Error", TableName));
+            DevExpress.XtraEditors.XtraMessageBox.AllowHtmlText = true;
+
+            if (ExtremeVeriables.DoNotShowAnyAlert)
+            {
+                Common.Utility.WriteLog(title + Environment.NewLine + TableName, "alerts.txt");
+
+            }
+            else
+                DevExpress.XtraEditors.XtraMessageBox.Show("<size=12>" + string.Format("You can not add or delete. Foreign Key Error", TableName) + "</size>", title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+        }
+
+        /// <summary>
+        /// Alerts the error.
+        /// </summary>
+        /// <param name="ex">The ex.</param>
+        /// <param name="title">The title.</param>
+        /// <param name="ShowIgnoreButton">if set to <c>true</c> [show ignore button].</param>
+        /// <returns>DialogResult.</returns>
+        public static DialogResult AlertError(Exception ex, string title = "Error", bool ShowIgnoreButton = false)
+        {
+            DialogResult result;
+            string Message = ex.Message;
+
+            if (ex.InnerException != null)
+            {
+                Message += Environment.NewLine + "   |Inner Exception : " + ex.InnerException.Message;
+
+                if (ex.InnerException.InnerException != null)
+                {
+                    Message += Environment.NewLine + "       |Inner Exception : " + ex.InnerException.InnerException.Message;
+
+                    if (ex.InnerException.InnerException.InnerException != null)
+                    {
+                        Message += Environment.NewLine + "         |Inner Exception : " + ex.InnerException.InnerException.InnerException.Message;
+                    }
+                }
+            }
+
+            if (ex.Message.Contains("A network-related or instance-specific error occurred while establishing a connection to SQL Server"))
+            {
+                result = ErrorMessageBox.Show(string.Format("Could not connect to database server '{0}'.Please check your network connection.", (!Utility.IsNullOrDBNullorBlank(ServerName.DBSeries) ? "" : ServerName.ServerIP + ",") + ServerName.SQLPort), Application.ProductName + " - " + "Network Error", Message + Environment.NewLine + ex.StackTrace, ShowIgnoreButton, false);
+            }
+            else if (ex.Message.Contains("A transport-level error has occurred when receiving results from the server."))
+            {
+                result = ErrorMessageBox.Show(string.Format("Could not connect to database server '{0}'.Please check your network connection.", (!Utility.IsNullOrDBNullorBlank(ServerName.DBSeries) ? "" : ServerName.ServerIP + ",") + ServerName.SQLPort), Application.ProductName + " - " + "TransportLevel Error", Message + Environment.NewLine + ex.StackTrace, ShowIgnoreButton, false);
+            }
+            else if (ex.Message.Contains("Connection Timeout Expired.  The timeout period elapsed while attempting to consume the pre-login handshake acknowledgement"))
+            {
+                result = ErrorMessageBox.Show(string.Format("Could not connect to database server '{0}'.Please check your network connection.", (!Utility.IsNullOrDBNullorBlank(ServerName.DBSeries) ? "" : ServerName.ServerIP + ",") + ServerName.SQLPort), Application.ProductName + " - " + "Connection Timeout Expired", Message + Environment.NewLine + ex.StackTrace, ShowIgnoreButton, false);
+            }
+            else if (ex.Message.Contains("Timeout expired.  The timeout period elapsed prior to completion of the operation or the server is not responding"))
+            {
+                result = ErrorMessageBox.Show(string.Format("Could not connect to database server '{0}'.Please check your network connection.", (!Utility.IsNullOrDBNullorBlank(ServerName.DBSeries) ? "" : ServerName.ServerIP + ",") + ServerName.SQLPort), Application.ProductName + " - " + "server is not responding", Message + Environment.NewLine + ex.StackTrace, ShowIgnoreButton, false);
+            }
+            else if (ex.Message.Contains("because it is being used by another process") && ex.Message.Contains("The process cannot access the file"))
+            {
+                AlertWarning(string.Format("File already open..Please close it and try again."), title);
+                result = DialogResult.OK;
+            }
+            else if ((ex) is AlpException && ShowIgnoreButton == false)
+            {
+                Utility.AlertWarning(ex.Message, title);
+                result = DialogResult.OK;
+            }
+            else if ((ex) is SqlException)
+            {
+                SqlException sqlEx = (SqlException)ex;
+                StringBuilder strDesc = new StringBuilder();
+                strDesc.AppendLine(sqlEx.Message);
+                ErrorMgmt.WriteSQLExeception(ref strDesc, sqlEx);
+                ErrorMgmt.WriteSQLExeception(ref strDesc, ex);
+
+                if (ex.StackTrace != null) strDesc.AppendLine(ex.StackTrace.ToString());
+
+
+                if (sqlEx.Number == 547)
+                {
+                    if (sqlEx.Message.StartsWith("The DELETE"))
+                    {
+                        result = ErrorMessageBoxForForeignKeys.Show(Application.ProductName + " - " + "Foreign Key Error", strDesc.ToString(), ShowIgnoreButton, sqlEx);
+                    }
+                    else
+                    {
+                        result = ErrorMessageBox.Show("You can not add or delete. Foreign Key Error", Application.ProductName + " - " + "Foreign Key Error", strDesc.ToString(), ShowIgnoreButton);
+                    }
+                    //AlertForeignKeyError(title);
+                }
+                else if (sqlEx.Number == 4060 || sqlEx.Number == 53)
+                {
+                    result = ErrorMessageBox.Show("Could not connect to database server.Please check your network connection.", Application.ProductName + " - " + "Connection Error", strDesc.ToString(), ShowIgnoreButton, false);
+                    //Utility.AlertError("Could not connect to database server.Please check your network connection.");
+                }
+
+                else
+                {
+                    result = ErrorMessageBox.Show(Message, Application.ProductName + " - " + "SQL Error", strDesc.ToString(), ShowIgnoreButton);
+                }
+            }
+            else if (ex.Message.Contains("Could not load file or assembly 'CrystalDecisions.Shared, Version=13.0.4000.0"))
+            {
+                //result = ErrorMessageBox.Show("CRRuntime_32_bit 13.0.13 is not installed", Application.ProductName + " - " + "SAP Missing", , ShowIgnoreButton);
+                Utility.AlertWarning("CRRuntime_32_bit 13.0.4000 is not installed, Please install CRRuntime_32_bit 13.0.40, You can download this file from www.alphaebarcode.com/download page", "SAP Missing");
+                result = DialogResult.OK;
+                return result;
+            }
+            else if (ex.Message.Contains("Could not load file or assembly 'CrystalDecisions.Shared, Version=13.0.4000.0"))
+            {
+                //result = ErrorMessageBox.Show("CRRuntime_32_bit 13.0.13 is not installed", Application.ProductName + " - " + "SAP Missing", , ShowIgnoreButton);
+                Utility.AlertWarning("CRRuntime_32_bit 13.0.4000 is not installed, Please install CRRuntime_32_bit 13.0.40, You can download this file from www.alphaebarcode.com/download page", "SAP Missing");
+                result = DialogResult.OK;
+                return result;
+            }
+            else if (ex.Message.ToLower().Contains("the 'microsoft.ace.oledb.12.0' provider is not registered on the local machi"))
+            {
+                string exePath = ExtremeVeriables.StartupPath + "\\Source\\accessdatabaseengine_X64.exe";
+                if (System.IO.File.Exists(exePath))
+                {
+                    if (Utility.AlertQuestion("AccessDatabaseEngine.exe is not installed. Do you want to install it now ..?", "AccessDatabaseEngine.exe Missing", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1) == DialogResult.Yes)
+                    {
+                        try
+                        {
+                            Process.Start(exePath, "/quiet");
+                        }
+                        catch { }
+                    }
+                }
+                else
+                {
+                    //Utility.AlertWarning("AccessDatabaseEngine.exe is not installed..!!", "AccessDatabaseEngine.exe Missing");
+                    if (Utility.AlertQuestion("AccessDatabaseEngine.exe is not installed. Do you want to download it now ..?", "AccessDatabaseEngine.exe Missing", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1) == DialogResult.Yes)
+                    {
+                        try
+                        {
+                            using (frmDownloadFile obj = new frmDownloadFile("https://www.alphaebarcode.com/Downloads/accessdatabaseengine_X64.exe", "Download AccessDatabaseEngine.exe", exePath))
+                            {
+                                if (obj.ShowDialog() == DialogResult.OK)
+                                    Process.Start(exePath, "/quiet");
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                result = DialogResult.OK;
+                return result;
+            }
+            else if (Message.Contains("Could not load file or assembly 'Microsoft.SqlServer.BatchParserClient, Version=10.0.0.0,"))
+            {
+                Utility.AlertWarning("SQL - SharedManagementObjects.msi and SQLSysClrTypes.msi is not installed..!!", "Some setup Missing");
+                result = DialogResult.OK;
+                return result;
+            }
+            else
+            {
+                result = ErrorMessageBox.Show(Message, Application.ProductName + " - " + "" + title, ex.StackTrace, ShowIgnoreButton);
+                //Utility.AlertError(ex.Message);
+            }
+            return result;
+        }
+        #endregion
+
+        #region ForceCloseConnection
+        /// <summary>
+        /// Forces the close connection.
+        /// </summary>
+        /// <param name="command">The command.</param>
+        public static void ForceCloseConnection(SqlCommand command)
+        {
+            if (command != null)
+            {
+                if (command.Connection != null)
+                {
+                    if (command.Connection.State == ConnectionState.Open)
+                    {
+                        command.Connection.Close();
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region ClearText
+        /// <summary>
+        /// Clears the text.
+        /// </summary>
+        /// <param name="controls">The controls.</param>
+        public static void ClearText(Control cntr)
+        {
+            if ((cntr) is AlpDevTextBox)
+            {
+                if (((AlpDevTextBox)cntr).IsClearControl)
+                {
+                    ((AlpDevTextBox)cntr).EditValue = "";
+                    ((AlpDevTextBox)cntr).IsValid = true;
+                    ((AlpDevTextBox)cntr).ErrorText = "";
+                    ((AlpDevTextBox)cntr).PKValue = "";
+                }
+            }
+            else if ((cntr) is AlpDevPopupContainerEdit)
+            {
+                ((AlpDevPopupContainerEdit)cntr).EditValue = "";
+                ((AlpDevPopupContainerEdit)cntr).IsValid = true;
+                ((AlpDevPopupContainerEdit)cntr).ErrorText = "";
+            }
+            else if ((cntr) is AlpDevLookUpEdit)
+            {
+                if (((AlpDevLookUpEdit)cntr).IsClearControl)
+                {
+                    ((AlpDevLookUpEdit)cntr).EditValue = null;
+                    ((AlpDevLookUpEdit)cntr).IsValid = true;
+                    ((AlpDevLookUpEdit)cntr).ErrorText = "";
+                }
+            }
+            else if ((cntr) is AlpDevSearchLookUpEdit)
+            {
+                if (((AlpDevSearchLookUpEdit)cntr).IsClearControl)
+                {
+                    ((AlpDevSearchLookUpEdit)cntr).EditValue = null;
+                    ((AlpDevSearchLookUpEdit)cntr).IsValid = true;
+                    ((AlpDevSearchLookUpEdit)cntr).ErrorText = "";
+                }
+            }
+            else if ((cntr) is AlpDevSpinEdit)
+            {
+                if (((AlpDevSpinEdit)cntr).IsClearControl)
+                {
+                    ((AlpDevSpinEdit)cntr).Value = 0;
+                    ((AlpDevSpinEdit)cntr).IsValid = true;
+                    ((AlpDevSpinEdit)cntr).ErrorText = "";
+                }
+            }
+            else if ((cntr) is AlpDevMemoEdit)
+            {
+                ((AlpDevMemoEdit)cntr).Text = "";
+                ((AlpDevMemoEdit)cntr).IsValid = true;
+                ((AlpDevMemoEdit)cntr).ErrorText = "";
+            }
+            if ((cntr) is AlpDevDateEdit)
+            {
+                if (((AlpDevDateEdit)cntr).IsClearControl)
+                {
+                    ((AlpDevDateEdit)cntr).EditValue = null;
+                    ((AlpDevDateEdit)cntr).IsValid = true;
+                    ((AlpDevDateEdit)cntr).ErrorText = "";
+                }
+            }
+            if ((cntr) is AlpDevButtonEdit)
+            {
+                if (((AlpDevButtonEdit)cntr).IsClearControl)
+                {
+                    ((AlpDevButtonEdit)cntr).EditValue = "";
+                    ((AlpDevButtonEdit)cntr).IsValid = true;
+                    ((AlpDevButtonEdit)cntr).ErrorText = "";
+                    ((AlpDevButtonEdit)cntr).PKValue = "";
+                }
+            }
+            else if ((cntr) is AlpDevComboBoxEdit)
+            {
+                if (((AlpDevComboBoxEdit)cntr).IsClearControl)
+                {
+                    ((AlpDevComboBoxEdit)cntr).EditValue = null;
+                    ((AlpDevComboBoxEdit)cntr).IsValid = true;
+                    ((AlpDevComboBoxEdit)cntr).ErrorText = "";
+                }
+            }
+            else if ((cntr) is AlpDevTimeEdit)
+            {
+                if (((AlpDevTimeEdit)cntr).IsClearControl)
+                {
+                    ((AlpDevTimeEdit)cntr).EditValue = null;
+                    ((AlpDevTimeEdit)cntr).IsValid = true;
+                    ((AlpDevTimeEdit)cntr).ErrorText = "";
+                }
+            }
+            if ((cntr) is AlpDevLibrary.CameraControl.AlpDevCameraControl)
+            {
+                if (((AlpDevLibrary.CameraControl.AlpDevCameraControl)cntr).IsClearControl)
+                {
+                    ((AlpDevLibrary.CameraControl.AlpDevCameraControl)cntr).ClearControl();
+                }
+            }
+
+            foreach (Control child in cntr.Controls)
+            {
+                if (child != null)
+                    Utility.ClearText(child);
+            }
+        }
+        public static void ClearText(LayoutControlGroup group)
+        {
+            foreach (BaseLayoutItem item in group.Items)
+            {
+                if (item is TabbedControlGroup)
+                {
+                    ClearText((item as TabbedControlGroup));
+                }
+                if (item is LayoutControlGroup)
+                {
+                    ClearText((item as LayoutControlGroup));
+                }
+                else if (item is LayoutControlItem)
+                {
+                    Control cntr = (item as LayoutControlItem).Control;
+                    if (cntr != null)
+                        Utility.ClearText(cntr);
+                }
+            }
+        }
+        public static void ClearText(TabbedControlGroup group)
+        {
+            foreach (LayoutControlGroup item in group.TabPages)
+            {
+                ClearText(item);
+            }
+        }
+
+        #endregion
+
+  
+
+    
+
+
+   
+        #region IsNumeric
+        /// <summary>
+        /// Determines whether the specified value is numeric.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if the specified value is numeric; otherwise, <c>false</c>.</returns>
+        public static bool IsNumeric(object value)
+        {
+            try
+            {
+                string s = Convert.ToString(value);
+                double outvar;
+                return Double.TryParse(s, out outvar);
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region IsDate
+        /// <summary>
+        /// Determines whether the specified value is date.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if the specified value is date; otherwise, <c>false</c>.</returns>
+        public static bool IsDate(object value)
+        {
+            try
+            {
+                if (IsNullOrDBNull(value))
+                    return false;
+
+                DateTime dt;
+                bool result = DateTime.TryParse(Convert.ToString(value), out dt);
+                if (result)
+                {
+                    if (dt < (new DateTime(1800, 1, 1)))
+                    {
+                        return false;
+                    }
+                    else
+                        return true;
+                }
+                else
+                    return false;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region IsNullOrDBNull
+        /// <summary>
+        /// Determines whether [is null or database null] [the specified value].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if [is null or database null] [the specified value]; otherwise, <c>false</c>.</returns>
+        public static bool IsNullOrDBNull(object value)
+        {
+            if (Convert.IsDBNull(value))
+            {
+                return true;
+            }
+            else if (value == null)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region IsNullOrDBNullorBlank
+        /// <summary>
+        /// Determines whether [is null or database nullor blank] [the specified value].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if [is null or database nullor blank] [the specified value]; otherwise, <c>false</c>.</returns>
+        public static bool IsNullOrDBNullorBlank(object value)
+        {
+            if (Convert.IsDBNull(value))
+            {
+                return true;
+            }
+            else if (value == null)
+            {
+                return true;
+            }
+            else if (string.IsNullOrEmpty(Convert.ToString(value)))
+                return true;
+            else if (value == "")
+                return true;
+            else
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region GetEncoderInfo
+        /// <summary>
+        /// Gets the encoder information.
+        /// </summary>
+        /// <param name="MimeType">Type of the MIME.</param>
+        /// <returns>System.Drawing.Imaging.ImageCodecInfo.</returns>
+        public static System.Drawing.Imaging.ImageCodecInfo GetEncoderInfo(string MimeType)
+        {
+            int j;
+            System.Drawing.Imaging.ImageCodecInfo[] ancoders;
+            ancoders = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders();
+            j = 0;
+            for (j = 0; j <= ancoders.Length - 1; j++)
+            {
+                if (ancoders[j].MimeType == MimeType)
+                {
+                    return ancoders[j];
+                }
+
+            }
+            return null;
+        }
+        #endregion
+
+        #region GetZeros
+        /// <summary>
+        /// Gets the zeros.
+        /// </summary>
+        /// <param name="count">The count.</param>
+        /// <returns>System.String.</returns>
+        public static string GetZeros(int count)
+        {
+            string s = "";
+            while (count > 0)
+            {
+                s = s + "0";
+                count -= 1;
+            }
+            return s;
+        }
+        #endregion
+
+        #region GetFileName
+        public static string GetFileName(string FileFullPath, bool CheckIfExistance = false)
+        {
+            string Name = GetFileName(System.IO.Path.GetFileNameWithoutExtension(FileFullPath));
+
+            string FullPath = "";
+            if (CheckIfExistance)
+                FullPath = GetNewFileName(System.IO.Path.GetDirectoryName(FileFullPath) + "\\" + Name + System.IO.Path.GetExtension(FileFullPath));
+            else
+                FullPath = FileFullPath;
+
+            return FullPath;
+        }
+        /// <summary>
+        /// Gets the name of the file.
+        /// </summary>
+        /// <param name="DirectoryPath">The directory path.</param>
+        /// <param name="FileName">Name of the file.</param>
+        /// <param name="Extension">The extension.</param>
+        /// <param name="CheckIfExistance">if set to <c>true</c> [check if existance].</param>
+        /// <returns>System.String.</returns>
+        public static string GetFileName(string DirectoryPath, string FileName, string Extension, bool CheckIfExistance = false)
+        {
+            string Name = GetFileName(FileName);
+            string FullPath = "";
+            if (CheckIfExistance)
+                FullPath = GetNewFileName(DirectoryPath + Name + Extension);
+            else
+                FullPath = DirectoryPath + Name + Extension;
+            return FullPath;
+
+        }
+        /// <summary>
+        /// Gets the name of the file.
+        /// </summary>
+        /// <param name="FileName">Name of the file.</param>
+        /// <returns>System.String.</returns>
+        public static string GetFileName(string FileName)
+        {
+            string strtext = "";
+            strtext = Regex.Replace(FileName, @"<(.|\n)*?>", string.Empty);
+            strtext = strtext.Replace("\r", "-");
+            strtext = strtext.Replace("\\", "-");
+            strtext = strtext.Replace("/", "-");
+            strtext = strtext.Replace(":", "-");
+            strtext = strtext.Replace("'", "-");
+            strtext = strtext.Replace("\"", "-");
+            strtext = strtext.Replace("?", "-");
+            strtext = strtext.Replace("|", "-");
+            strtext = strtext.Replace("<", "-");
+            strtext = strtext.Replace(">", "-");
+            strtext = strtext.Replace("\n", "-");
+            strtext = strtext.Replace("&", "-");
+            strtext = strtext.Replace("&nbsp;", "-");
+            strtext = strtext.Replace(" ", "-");
+            strtext = strtext.Replace(".", "-");
+            strtext = strtext.Replace("*", "-");
+            strtext = strtext.Replace("#", "-");
+            strtext = strtext.Replace("%", "-");
+            strtext = strtext.Replace("\t", "-");
+            return strtext;
+        }
+        /// <summary>
+        /// Gets the new name of the file.
+        /// </summary>
+        /// <param name="FilePath">The file path.</param>
+        /// <returns>System.String.</returns>
+        private static string GetNewFileName(string FilePath)
+        {
+            int counter = 1;
+            string Orignal = FilePath;
+
+            string Directory = System.IO.Path.GetDirectoryName(FilePath);
+            string FileName = System.IO.Path.GetFileNameWithoutExtension(FilePath);
+            string Extension = System.IO.Path.GetExtension(FilePath);
+
+            while (System.IO.File.Exists(FilePath))
+            {
+                FileName = System.IO.Path.GetFileNameWithoutExtension(Orignal);
+                FilePath = Directory + "\\" + FileName + "(" + counter.ToString() + ")" + Extension;
+                counter += 1;
+            }
+            return FilePath;
+        }
+        #endregion
+
+        #region DateValidate
+        /// <summary>
+        /// Dates the validate.
+        /// </summary>
+        /// <param name="ctrl">The control.</param>
+        /// <param name="OpeningDate">The opening date.</param>
+        /// <param name="ClosingDate">The closing date.</param>
+        /// <returns><c>true</c> if XXXX, <c>false</c> otherwise.</returns>
+        public static bool DateValidate(Control ctrl, DateTime OpeningDate, DateTime ClosingDate)
+        {
+            DateTime dt;
+            int dayno, month = 0;
+            string date = ctrl.Text.Trim();
+
+            if (date != null)
+            {
+                date = date.Replace("_", "");
+                date = date.Replace("/", "");
+                date = date.Trim();
+
+                if (date.Length > 0)
+                {
+                    if (date.Length == 1)
+                        dayno = Convert.ToInt32(date.Substring(0, 1));
+                    else if (date.Length == 2)
+                        dayno = Convert.ToInt32(date.Substring(0, 2));
+                    else if (date.Length == 3)
+                    {
+                        dayno = Convert.ToInt32(date.Substring(0, 2));
+                        month = Convert.ToInt32(date.Substring(2, 1));
+                    }
+                    else if (date.Length == 4)
+                    {
+                        dayno = Convert.ToInt32(date.Substring(0, 2));
+                        month = Convert.ToInt32(date.Substring(2, 2));
+                    }
+                    else
+                    {
+                        dayno = Convert.ToInt32(date.Substring(0, 2));
+                        month = Convert.ToInt32(date.Substring(2, 2));
+                    }
+
+                    if (date.Length > 0 && date.Length < 3)// && dayno <= DateTime.Now.Day) //dayno >= DateTime.Now.Day &&
+                    {
+                        date = "";
+                        date = String.Format(Convert.ToInt32(dayno).ToString("D2") + "{0}" + DateTime.Now.Month.ToString("D2") + "{0}" + DateTime.Now.Year.ToString(), '/');
+                    }
+                    else if (date.Length > 0 && date.Length < 5)// && dayno <= DateTime.Now.Day) //dayno >= DateTime.Now.Day &&
+                    {
+                        date = "";
+                        date = String.Format(Convert.ToInt32(dayno).ToString("D2") + "{0}" + month.ToString("D2") + "{0}" + DateTime.Now.Year.ToString(), '/');
+                    }
+                    else if (date.Length > 0 && date.Length < 9)// && dayno <= DateTime.Now.Day) //dayno >= DateTime.Now.Day &&
+                    {
+                        if (date.Length == 8)
+                        {
+                            if (Convert.ToInt32(date.Substring(4, 4)) == DateTime.Now.Year)
+                                date = String.Format(Convert.ToInt32(dayno).ToString("D2") + "{0}" + month.ToString("D2") + "{0}" + DateTime.Now.Year.ToString(), '/');
+                            else
+                                date = String.Format(Convert.ToInt32(dayno).ToString("D2") + "{0}" + month.ToString("D2") + "{0}" + date.Substring(4, 4), '/');
+                        }
+                        else if (date.Length == 6)
+                        {
+                            int year = Common.Utility.ConvertToInt(DateTime.Now.Year.ToString().Substring(0, 2) + date.Substring(4, 2));
+                            date = String.Format(Convert.ToInt32(dayno).ToString("D2") + "{0}" + month.ToString("D2") + "{0}" + year.ToString(), '/');
+                        }
+                        else if (date.Length >= 5 && date.Length < 8)
+                            date = String.Format(Convert.ToInt32(dayno).ToString("D2") + "{0}" + month.ToString("D2") + "{0}" + DateTime.Now.Year.ToString(), '/');
+                    }
+                }
+
+                if (DateTime.TryParseExact(date, "dd/MM/yyyy", null, System.Globalization.DateTimeStyles.None, out dt) && DateTime.Parse(date) >= OpeningDate.Date && DateTime.Parse(date) <= ClosingDate.Date) //DateTime.Parse(date) <= DateTime.Now.Date &&
+                {
+                    ctrl.Text = date;
+                    return true;
+                }
+                else
+                    return false;
+            }
+            else
+                return false;
+        }
+        #endregion
+
+        #region ExcelToDataTable
+        /// <summary>
+        /// Excels to data table.
+        /// </summary>
+        /// <param name="FullExcelFilePath">The full excel file path.</param>
+        /// <param name="SheetName">Name of the sheet.</param>
+        /// <returns>DataTable.</returns>
+        public static DataTable ExcelToDataTable(string FullExcelFilePath, string SheetName, bool DataTypeChangeString = false, bool HasHeader = true)
+        {
+            //if (!File.Exists(FullExcelFilePath))
+            //{
+            //    AlertError("File not found");
+            //    return null;
+            //}
+
+
+            //if (SheetName.EndsWith("$"))
+            //    SheetName = SheetName.Substring(0, SheetName.Length - 1);
+
+            //try
+            //{
+            //    using (OfficeOpenXml.ExcelPackage excelPkg = new OfficeOpenXml.ExcelPackage(new FileInfo(FullExcelFilePath)))
+            //    {
+            //        foreach (OfficeOpenXml.ExcelWorksheet oSheet in excelPkg.Workbook.Worksheets)
+            //        {
+            //            if (oSheet.Name == SheetName)
+            //            {
+            //                int totalRows = oSheet.Dimension.End.Row;
+            //                int totalCols = oSheet.Dimension.End.Column;
+            //                DataTable dt = new DataTable("excelData");
+
+            //                 foreach (var firstRowCell in oSheet.Cells[1, 1, 1, oSheet.Dimension.End.Column])
+            //                 {
+            //                     string name = HasHeader ? firstRowCell.Text : string.Format("Column {0}", firstRowCell.Start.Column);
+            //                    dt.Columns.Add(name);
+            //                 }
+            //                 var startRow = HasHeader ? 2 : 1;
+            //                 for (int rowNum = startRow; rowNum <= oSheet.Dimension.End.Row; rowNum++)
+            //                 {
+            //                     var wsRow = oSheet.Cells[rowNum, 1, rowNum, oSheet.Dimension.End.Column];
+            //                     DataRow row = dt.Rows.Add();
+            //                     foreach (var cell in wsRow)
+            //                     {
+            //                         row[cell.Start.Column - 1] = cell.Text;
+            //                     }
+            //                 }
+
+            //                 dt.AcceptChanges();
+            //                //for (int j = 1; j <= totalCols; j++)
+            //                //{
+            //                //    string name = HasHeader ? firstRowCell.Text : string.Format("Column {0}", firstRowCell.Start.Column) "Column - " + j.ToString();
+            //                //    dt.Columns.Add(name);
+            //                //}
+
+            //                //for (int i = 1; i <= totalRows; i++)
+            //                //{
+            //                //    DataRow dr = dt.Rows.Add();
+            //                //    for (int j = 1; j <= totalCols; j++)
+            //                //    {
+            //                //        dr[j - 1] = oSheet.Cells[i, j].Value;
+            //                //    }
+            //                //}
+            //                return dt;
+            //            }
+            //        }
+            //    }
+            //    return null;
+            //}
+            //finally { }
+
+            DataTable dtResult = null;
+
+            if (FullExcelFilePath.ToLower().EndsWith(".xls") || FullExcelFilePath.ToLower().EndsWith(".xlsx"))
+            {
+
+                if (!SheetName.EndsWith("$") && !SheetName.EndsWith("$'"))
+                    SheetName = SheetName + "$";
+
+
+                //var connectionString = string.Format("Provider=Microsoft.Jet.OLEDB.4.0; data source={0}; Extended Properties=Excel 8.0;", FullExcelFilePath);
+                var connectionString = String.Format("Provider=Microsoft.ACE.OLEDB.12.0;Data Source={0};Extended Properties=\"Excel 12.0;HDR={1};IMEX=1;TypeGuessRows=0;ImportMixedTypes=Text\"", FullExcelFilePath, (HasHeader == true) ? "Yes" : "No");
+                var adapter = new OleDbDataAdapter(string.Format("select * from [{0}]", SheetName), connectionString);
+                try
+                {
+                    string tableName = "excelData";
+                    var ds = new DataSet();
+                    try
+                    {
+                        adapter.Fill(ds, tableName);
+                    }
+                    catch (Exception ex)
+                    {
+
+                        if (ex.Message.Contains("$' is not a valid name"))
+                        {
+                            //tility.AlertInfo(SheetName + " excel-sheet not found in selected Excel file");
+                            throw new AlpException("Sheet '" + SheetName + "'  not found in selected Excel file");
+                            //return new DataTable();
+                            //  throw;
+                        }
+                        else
+                        {
+                            throw;
+                        }
+
+
+                    }
+
+
+                    if (DataTypeChangeString)
+                    {
+                        DataTable dtCloned = ds.Tables[0].Clone();
+                        foreach (DataColumn dc in dtCloned.Columns)
+                        {
+                            dc.DataType = typeof(string);
+                        }
+                        foreach (DataRow dr in ds.Tables[0].Rows)
+                        {
+                            dtCloned.ImportRow(dr);
+                        }
+                        dtResult = dtCloned;
+                    }
+                    else
+                    {
+                        DataTable data = ds.Tables[tableName];
+                        dtResult = data;
+                    }
+                }
+                finally { adapter.Dispose(); }
+            }
+            else
+            {
+                CSVReadWrite obj = new CSVReadWrite();
+                DataTable dt = obj.ReadCSV(FullExcelFilePath, true, HasHeader);
+                dtResult = dt;
+            }
+
+            if (dtResult != null) /*chirag 27 06 2024 (For Delete Blank Row from bottom) */
+            {
+                List<DataRow> lstDrForDelete = new List<DataRow>();
+                for (int i = dtResult.Rows.Count - 1; i >= 0; i--)
+                {
+                    DataRow dr = dtResult.Rows[i];
+                    bool IsBlankRow = true;
+                    foreach (DataColumn dc in dtResult.Columns)
+                    {
+                        if (!Utility.IsNullOrDBNullorBlank(dr[dc]))
+                        {
+                            IsBlankRow = false;
+                            break;
+                        }
+                    }
+                    if (IsBlankRow == true)
+                        lstDrForDelete.Add(dr);
+                    else
+                        break;
+                }
+
+                foreach (DataRow dr in lstDrForDelete)
+                    dtResult.Rows.Remove(dr);
+            }
+            return dtResult;
+        }
+        #endregion
+
+        #region ExcelToDataTable
+        /// <summary>
+        /// Excels to data table.
+        /// </summary>
+        /// <param name="FullExcelFilePath">The full excel file path.</param>
+        /// <param name="SheetName">Name of the sheet.</param>
+        /// <returns>DataTable.</returns>
+        public static DataTable NotepadToDataTable(string FullFilePath)
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("Column1", typeof(string));
+            string[] lines = System.IO.File.ReadAllLines(FullFilePath);
+            foreach (string line in lines)
+            {
+                if (!Utility.IsNullOrDBNullorBlank(line.Trim()))
+                {
+                    DataRow dr = dt.NewRow();
+                    dr["Column1"] = line.Trim();
+                    dt.Rows.Add(dr);
+                }
+            }
+            return dt;
+
+        }
+        #endregion
+
+        #region DataTableToExcel
+        public static void DataTableToExcel(DataTable table, string FileName, bool ShowSaveDialog = true)
+        {
+
+            try
+            {
+                // Storing header part in Excel
+
+
+                SaveFileDialog SaveFileDialog = new SaveFileDialog();
+                try
+                {
+                    SaveFileDialog.FileName = FileName + ".xls";
+                    SaveFileDialog.AddExtension = true;
+                    SaveFileDialog.DefaultExt = ".xls";
+
+                    if (ShowSaveDialog == false || (SaveFileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK && !string.IsNullOrEmpty(SaveFileDialog.FileName)))
+                    {
+                        string Destination = (ShowSaveDialog == true) ? SaveFileDialog.FileName : FileName;
+                        if (System.IO.File.Exists(Destination))
+                            System.IO.File.Delete(Destination);
+
+                        if (Destination.ToLower().EndsWith(".xls") || Destination.ToLower().EndsWith(".xlsx"))
+                        {
+                            FileInfo ExcelFileInfo = new FileInfo(Destination);
+                            OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
+
+                            using (OfficeOpenXml.ExcelPackage excPackage = new OfficeOpenXml.ExcelPackage(ExcelFileInfo))
+                            {
+                                OfficeOpenXml.ExcelWorksheet ws = excPackage.Workbook.Worksheets.Add("Sheet1");
+                                ws.Cells["A1"].LoadFromDataTable(table, true);
+                                excPackage.Save();
+                            }
+                        }
+                        else
+                        {
+                            CSVReadWrite obj = new CSVReadWrite();
+                            obj.WriteCSV(table, Destination);
+                        }
+
+                        if (ShowSaveDialog && Common.Utility.AlertQuestion("Do you want to open this file ?", "Export To Excell Successfull", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                        {
+                            Process.Start(Destination);
+                        }
+                    }
+                }
+                finally { SaveFileDialog.Dispose(); }
+            }
+            finally
+            {
+
+            }
+
+            //Microsoft.Office.Interop.Excel.Application ExcelApp = new Microsoft.Office.Interop.Excel.Application();
+            //try
+            //{
+            //    ExcelApp.Application.Workbooks.Add(Type.Missing);
+
+            //    // Change properties of the Workbook 
+            //    Microsoft.Office.Interop.Excel.Workbook workbook = new Microsoft.Office.Interop.Excel.Workbook();
+
+
+            //    ExcelApp.Columns.ColumnWidth = 20;
+
+            //    // Storing header part in Excel
+
+            //    for (int i = 1; i < table.Columns.Count + 1; i++)
+            //    {
+            //        ExcelApp.Cells[1, i] = table.Columns[i - 1].ColumnName;
+            //    }
+
+            //    // Storing Each row and column value to excel sheet
+            //    for (int i = 0; i <= table.Rows.Count - 1; i++)
+            //    {
+            //        for (int j = 0; j < table.Columns.Count; j++)
+            //        {
+            //            var stringtype = new[] { typeof(string) };
+            //            if (table.Columns[j].DataType == typeof(string))
+            //                ExcelApp.Cells[i + 2, j + 1] = "'" + Convert.ToString(table.Rows[i][j]);
+            //            else
+            //                ExcelApp.Cells[i + 2, j + 1] = table.Rows[i][j];
+            //        }
+            //    }
+            //    SaveFileDialog SaveFileDialog = new SaveFileDialog();
+            //    try
+            //    {
+            //        SaveFileDialog.FileName = FileName + ".xls";
+            //        SaveFileDialog.AddExtension = true;
+            //        SaveFileDialog.DefaultExt = ".xls";
+
+            //        if (ShowSaveDialog == false || SaveFileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK & !string.IsNullOrEmpty(SaveFileDialog.FileName))
+            //        {
+            //            if (ShowSaveDialog)
+            //                ExcelApp.ActiveWorkbook.SaveCopyAs(SaveFileDialog.FileName);
+            //            else
+            //                ExcelApp.ActiveWorkbook.SaveCopyAs(FileName);
+            //            ExcelApp.ActiveWorkbook.Saved = true;
+
+            //            if (ShowSaveDialog && Common.Utility.AlertQuestion("Do you want to open this file ?", "Export To Excell Successfull", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+            //            {
+            //                // Process.Start(SaveFileDialog.FileName);
+            //                ExcelApp.Visible = true;
+            //            }
+            //            else
+            //            {
+            //                ExcelApp.Visible = false;
+            //                ExcelApp.Quit();
+
+            //            }
+
+
+            //        }
+            //    }
+            //    finally { SaveFileDialog.Dispose(); }
+
+
+            //}
+            //finally
+            //{
+
+            //    Marshal.FinalReleaseComObject(ExcelApp);
+
+            //}
+
+
+        }
+        #endregion
+
+        #region GetAllExcelSheet
+        /// <summary>
+        /// Gets all excel sheet.
+        /// </summary>
+        /// <param name="FullExcelFilePath">The full excel file path.</param>
+        /// <returns>List&lt;String&gt;.</returns>
+        public static List<String> GetAllExcelSheet(string FullExcelFilePath)
+        {
+            //List<string> lstSheet = new List<string>();
+            //if (!File.Exists(FullExcelFilePath))
+            //{
+            //    AlertError("File not found");
+            //    return lstSheet;
+            //}
+            //try
+            //{
+            //    using (OfficeOpenXml.ExcelPackage excelPkg = new OfficeOpenXml.ExcelPackage(new FileInfo(FullExcelFilePath)))
+            //    {
+            //        if (excelPkg.Workbook.Worksheets.Count > 0)
+            //        {
+            //            foreach (OfficeOpenXml.ExcelWorksheet sheet in excelPkg.Workbook.Worksheets)
+            //            {
+            //                lstSheet.Add(sheet.Name);
+            //            }
+            //        }
+            //        else
+            //        {
+            //            Utility.AlertWarning("No worksheets found. Try following step .." + Environment.NewLine + " Open your excel file and save as excel workbook and import.");
+            //        }
+            //    }
+            //}
+            //finally
+            //{
+
+            //}
+
+
+            //var connectionString = string.Format("Provider=Microsoft.Jet.OLEDB.4.0; data source={0}; Extended Properties=Excel 8.0;", FullExcelFilePath);
+            List<string> lstSheet = new List<string>();
+
+            if (FullExcelFilePath.ToLower().EndsWith(".xls") || FullExcelFilePath.ToLower().EndsWith(".xlsx"))
+            {
+                var connectionString = String.Format("Provider=Microsoft.ACE.OLEDB.12.0;Data Source={0};Extended Properties=\"Excel 12.0\"", FullExcelFilePath);
+
+                OleDbConnection con = new OleDbConnection(connectionString);
+                try
+                {
+                    con.Open();
+                    DataTable dtSheet = con.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, new object[] { null, null, null, "TABLE" });
+                    foreach (DataRow dr in dtSheet.Rows)
+                    {
+                        string TableName = Convert.ToString(dr["TABLE_NAME"]);
+                        if (TableName != null && (TableName.EndsWith("$'") || TableName.EndsWith("$")))
+                            lstSheet.Add(TableName);
+                    }
+                }
+                finally
+                {
+                    if (con.State == ConnectionState.Open)
+                        con.Close();
+                }
+            }
+            else
+            {
+
+                lstSheet = new List<string>();
+                lstSheet.Add("Sheet1");
+            }
+            return lstSheet;
+        }
+        #endregion
+
+        #region RemoveSpace
+        /// <summary>
+        /// Removes the space.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>System.String.</returns>
+        public static string RemoveSpace(string value)
+        {
+            string s = "";
+            foreach (char c in value)
+            {
+                if (c != ' ')
+                {
+                    s = s + c;
+                }
+            }
+            return s;
+        }
+        #endregion
+
+        #region IsOdd
+        /// <summary>
+        /// Determines whether the specified number is odd.
+        /// </summary>
+        /// <param name="num">The number.</param>
+        /// <returns><c>true</c> if the specified number is odd; otherwise, <c>false</c>.</returns>
+        public static bool IsOdd(int num)
+        {
+            int i = 0;
+            bool odd = false;
+            while (i <= num)
+            {
+                odd = !odd;
+                i += 1;
+            }
+            return odd;
+        }
+        #endregion
+
+
+
+        #region ReleaseObject
+        /// <summary>
+        /// Releases the object.
+        /// </summary>
+        /// <param name="obj">The object.</param>
+        public static void ReleaseObject(object obj)
+        {
+            try
+            {
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(obj);
+                obj = null;
+            }
+            catch (Exception ex)
+            {
+                obj = null;
+            }
+            finally
+            {
+                GC.Collect();
+            }
+        }
+        #endregion
+
+    
+        #region GetSafeText
+        /// <summary>
+        /// Gets the safe text.
+        /// </summary>
+        /// <param name="text">The text.</param>
+        /// <returns>System.String.</returns>
+        public static string GetSafeText(string text)
+        {
+            text = text.Replace("'", "");
+            return text;
+        }
+        #endregion
+
+    
+        #region IsTimeSpan
+        /// <summary>
+        /// Determines whether [is time span] [the specified value].
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if [is time span] [the specified value]; otherwise, <c>false</c>.</returns>
+        public static bool IsTimeSpan(object value)
+        {
+            try
+            {
+                if (IsNullOrDBNull(value))
+                    return false;
+                value = TimeSpan.Parse(Convert.ToString(value));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region GetImageByte
+        /// <summary>
+        /// Gets the image byte.
+        /// </summary>
+        /// <param name="bitmap">The bitmap.</param>
+        /// <param name="format">The format.</param>
+        /// <returns>System.Byte[].</returns>
+        public static byte[] GetImageByte(Bitmap bitmap, ImageFormat format)
+        {
+            using (var stream = new MemoryStream())
+            {
+                bitmap.Save(stream, format);
+                return stream.ToArray();
+            }
+        }
+        public static byte[] GetImageByte(Image image, ImageFormat format)
+        {
+            using (var stream = new MemoryStream())
+            {
+                image.Save(stream, format);
+                return stream.ToArray();
+            }
+        }
+        #endregion
+
+        #region Serialize
+        /// <summary>
+        /// Serializes the specified object.
+        /// </summary>
+        /// <param name="obj">The object.</param>
+        /// <returns>System.String.</returns>
+        public static string Serialize(object obj)
+        {
+            Stream stream = new System.IO.MemoryStream();
+            XmlSerializer xmlSerializer = new XmlSerializer(obj.GetType());
+            xmlSerializer.Serialize(stream, obj);
+
+            stream.Seek(0, System.IO.SeekOrigin.Begin);
+            StreamReader reader = new StreamReader(stream);
+            string LayoutXMLText = reader.ReadToEnd();
+            reader.Close();
+            stream.Close();
+            return LayoutXMLText;
+        }
+        #endregion
+
+        #region Deserialize
+        /// <summary>
+        /// Deserializes the specified XML.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="xml">The XML.</param>
+        /// <returns>T.</returns>
+        public static T Deserialize<T>(string xml)
+        {
+            var xs = new XmlSerializer(typeof(T));
+            return (T)xs.Deserialize(new StringReader(xml));
+        }
+        #endregion
+
+
+        #region CompareVersion
+        /// <summary>
+        /// Compares the version.
+        /// </summary>
+        /// <param name="Version1">The version1.</param>
+        /// <param name="Version2">The version2.</param>
+        /// <returns>System.Int32.</returns>
+        public static int CompareVersion(string Version1, string Version2)
+        {
+            if (Version2 == "" || Version2 == null)
+                return 1;
+            else if (Version1 == null || Version1 == "")
+                return -1;
+            else
+            {
+                Version v1 = new Version(Version1);
+                Version v2 = new Version(Version2);
+                return v1.CompareTo(v2);
+            }
+        }
+        #endregion
+
+        #region ReadColumnValue
+        /// <summary>
+        /// Reads the column value from Data Row
+        /// </summary>
+        /// <param name="dr">The dr.</param>
+        /// <param name="ColumnName">Name of the column.</param>
+        /// <returns>System.Object.</returns>
+        public static object ReadColumnValue(DataRow dr, string ColumnName)
+        {
+            if ((dr != null) && dr.Table.Columns.Contains(ColumnName))
+            {
+                if (dr.RowState == DataRowState.Deleted)
+                    return dr[ColumnName, DataRowVersion.Original];
+                return dr[ColumnName];
+            }
+            else
+                return DBNull.Value;
+        }
+        /// <summary>
+        /// Reads the column int32.
+        /// </summary>
+        /// <param name="dr">The dr.</param>
+        /// <param name="ColumnName">Name of the column.</param>
+        /// <returns>System.Int32.</returns>
+        public static int ReadColumnInt32(DataRow dr, string ColumnName)
+        {
+            if ((dr != null) && dr.Table.Columns.Contains(ColumnName))
+            {
+                if (dr.RowState == DataRowState.Deleted)
+                    return Utility.ConvertToInt(dr[ColumnName, DataRowVersion.Original]);
+                return Utility.ConvertToInt(dr[ColumnName]);
+            }
+            else
+                return 0;
+        }
+
+        /// <summary>
+        /// Reads the column double.
+        /// </summary>
+        /// <param name="dr">The dr.</param>
+        /// <param name="ColumnName">Name of the column.</param>
+        /// <returns>System.Int32.</returns>
+        public static double ReadColumnDouble(DataRow dr, string ColumnName)
+        {
+            if ((dr != null) && dr.Table.Columns.Contains(ColumnName))
+            {
+                if (dr.RowState == DataRowState.Deleted)
+                    return Utility.ConvertToInt(dr[ColumnName, DataRowVersion.Original]);
+                return Utility.ConvertToDouble(dr[ColumnName]);
+            }
+            else
+                return 0;
+        }
+
+        /// <summary>
+        /// Reads the column string.
+        /// </summary>
+        /// <param name="dr">The dr.</param>
+        /// <param name="ColumnName">Name of the column.</param>
+        /// <returns>System.Int32.</returns>
+        public static string ReadColumnString(DataRow dr, string ColumnName)
+        {
+            if ((dr != null) && dr.Table.Columns.Contains(ColumnName))
+            {
+                if (dr.RowState == DataRowState.Deleted)
+                    return Convert.ToString(dr[ColumnName, DataRowVersion.Original]);
+                return Convert.ToString(dr[ColumnName]);
+            }
+            else
+                return "";
+        }
+
+      
+        #region ConvertImageToByteArray
+        /// <summary>
+        /// Convert the image to byte array
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static Byte[] ConvertImageToByteArray(Image value)
+        {
+            return ConvertImageToByteArray(value, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        /// <summary>
+        /// Converts the image to byte array.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Byte[].</returns>
+        public static Byte[] ConvertImageToByteArray(Image value, System.Drawing.Imaging.ImageFormat ImageFormat)
+        {
+            return ConvertImageToByteArray(value, ImageFormat, 0);
+        }
+        public static Byte[] ConvertImageToByteArray(Image value, System.Drawing.Imaging.ImageFormat ImageFormat, int quality)
+        {
+            try
+            {
+                MemoryStream mystream = new MemoryStream();
+                Byte[] bytearr;
+                using (Bitmap bmp = new Bitmap(value.Width, value.Height))
+                {
+                    Graphics g = Graphics.FromImage(bmp);
+
+                    g.CompositingQuality = CompositingQuality.HighQuality;
+                    g.SmoothingMode = SmoothingMode.HighQuality;
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                    g.DrawImage(value, new Rectangle(0, 0, value.Width, value.Height),
+              new Rectangle(0, 0, value.Width, value.Height), GraphicsUnit.Pixel);
+
+
+                    if (quality > 0)
+                    {
+                        // Encoder parameter for image quality 
+                        EncoderParameter qualityParam = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+                        // JPEG image codec 
+                        ImageCodecInfo jpegCodec = GetEncoderInfo("image/" + typeof(ImageFormat).Name.ToLower());
+                        EncoderParameters encoderParams = new EncoderParameters(1);
+                        encoderParams.Param[0] = qualityParam;
+
+                        bmp.Save(mystream, jpegCodec, encoderParams);
+                    }
+                    else
+                    {
+                        bmp.Save(mystream, ImageFormat);
+                    }
+
+                    bytearr = mystream.ToArray();
+                    mystream.Close();
+                    bmp.Dispose();
+                    mystream.Dispose();
+                }
+                return bytearr;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+        #endregion
+
+        #region ConvertImageToByteArray
+        /// <summary>
+        /// Converts the image to byte array.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>Byte[].</returns>
+        public static Byte[] ConvertImageToByteArray(string ImagePath, int Height = 0, int Width = 0)
+        {
+            try
+            {
+                Image img = null;
+                if (File.Exists(ImagePath))
+                    img = Utility.LoadImage(ImagePath, Height, Width, false);
+
+                if (img == null)
+                {
+                    return null;
+                }
+                MemoryStream mystream = new MemoryStream();
+                Byte[] bytearr;
+                using (Bitmap bmp = new Bitmap(img))
+                {
+                    bmp.Save(mystream, System.Drawing.Imaging.ImageFormat.Png);
+                    bytearr = mystream.ToArray();
+                    mystream.Close();
+                    bmp.Dispose();
+                    mystream.Dispose();
+                    img.Dispose();
+                }
+                return bytearr;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+        #endregion
+
+        #region ConvertBytesToMegabytes
+        /// <summary>
+        /// Converts the bytes to megabytes.
+        /// </summary>
+        /// <param name="bytes">The bytes.</param>
+        /// <returns>System.Double.</returns>
+        public static double ConvertBytesToMegabytes(long bytes)
+        {
+            return (bytes / 1024f) / 1024f;
+        }
+        #endregion
+
+        #region GetFileSizeInKB
+        public static double GetFileSizeInKB(long Bytes)
+        {
+            return (Bytes / 1024f);
+        }
+        #endregion
+
+        #region GetFileSizeInKB
+        public static double GetFileSizeInMB(long Bytes)
+        {
+            return ((Bytes / 1024f) / 1024f);
+        }
+        #endregion
+
+        #region GetFileSizeInKB
+        public static double GetFileSizeInGB(long Bytes)
+        {
+            return (((Bytes / 1024f) / 1024f) / 1024f);
+        }
+        #endregion
+
+        #region GetFileSizeString
+        public static string GetFileSizeString(long Bytes)
+        {
+            double Kb = Math.Round(GetFileSizeInKB(Bytes), 2);
+            double mb = Math.Round(GetFileSizeInMB(Bytes), 2);
+            if (mb > 1)
+                return mb.ToString() + " MB";
+            else
+                return Kb.ToString() + " KB";
+        }
+        #endregion
+
+
+
+        #region GetResizedImage
+        /// <summary>
+        /// Gets the resized image.
+        /// </summary>
+        /// <param name="imgIn">The img in.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="height">The height.</param>
+        /// <param name="AddWhite">if set to <c>true</c> [add white].</param>
+        /// <returns>Bitmap.</returns>
+        /// 
+        public static Image GetResizedImage(Image imgIn, int width, int height, bool AddWhite = false, bool DisposeOrignal = true)
+        {
+            if (width == 0 && height == 0)
+            {
+                width = imgIn.Width;
+                height = imgIn.Height;
+            }
+            else if (width == -1 && height == -1)
+            {
+                return imgIn;
+            }
+            if (width > imgIn.Width)
+                width = imgIn.Width;
+
+            if (height > imgIn.Height)
+                height = imgIn.Height;
+
+
+            double y = imgIn.Height;
+            double x = imgIn.Width;
+
+            double factor = 1;
+            if (width > 0)
+            {
+                factor = width / x;
+            }
+            else if (height > 0)
+            {
+                factor = height / y;
+            }
+            System.IO.MemoryStream outStream = new System.IO.MemoryStream();
+            Bitmap imgOut = new Bitmap((int)(x * factor), (int)(y * factor));
+
+            // Set DPI of image (xDpi, yDpi)
+            imgOut.SetResolution(imgIn.HorizontalResolution, imgIn.VerticalResolution);
+
+            Graphics g = Graphics.FromImage(imgOut);
+            if (AddWhite)
+                g.Clear(Color.White);
+            g.CompositingQuality = CompositingQuality.HighQuality;
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            g.DrawImage(imgIn, new Rectangle(0, 0, (int)(factor * x), (int)(factor * y)),
+              new Rectangle(0, 0, (int)x, (int)y), GraphicsUnit.Pixel);
+
+            imgIn.Dispose();
+            imgIn = null;
+
+            //imgOut.Save(outStream, getImageFormat(path));
+            return imgOut;
+        }
+        public static Bitmap GetResizedImage(Bitmap imgIn, int width, int height, bool AddWhite = false)
+        {
+            if (width == 0 && height == 0)
+            {
+                width = imgIn.Width;
+                height = imgIn.Height;
+            }
+            else if (width == -1 && height == -1)
+            {
+                return imgIn;
+            }
+            if (width > imgIn.Width)
+                width = imgIn.Width;
+
+            if (height > imgIn.Height)
+                height = imgIn.Height;
+
+
+            double y = imgIn.Height;
+            double x = imgIn.Width;
+
+            double factor = 1;
+            if (width > 0)
+            {
+                factor = width / x;
+            }
+            else if (height > 0)
+            {
+                factor = height / y;
+            }
+            //System.IO.MemoryStream outStream = new System.IO.MemoryStream();
+            Bitmap imgOut = new Bitmap((int)(x * factor), (int)(y * factor));
+
+            // Set DPI of image (xDpi, yDpi)
+            //imgOut.SetResolution(72, 72);
+            imgOut.SetResolution(imgIn.HorizontalResolution, imgIn.VerticalResolution);
+
+            Graphics g = Graphics.FromImage(imgOut);
+            if (AddWhite)
+                g.Clear(Color.White);
+
+            g.DrawImage(imgIn, new Rectangle(0, 0, (int)(factor * x), (int)(factor * y)),
+              new Rectangle(0, 0, (int)x, (int)y), GraphicsUnit.Pixel);
+
+            imgIn.Dispose();
+            imgIn = null;
+            g.Dispose();
+
+            //imgOut.Save(outStream, getImageFormat(path));
+            return imgOut;
+        }
+        ImageFormat getImageFormat(String path)
+        {
+            switch (Path.GetExtension(path))
+            {
+                case ".bmp": return ImageFormat.Bmp;
+                case ".gif": return ImageFormat.Gif;
+                case ".jpg": return ImageFormat.Jpeg;
+                case ".png": return ImageFormat.Png;
+                default: break;
+            }
+            return ImageFormat.Jpeg;
+        }
+        #endregion
+
+        #region SaveDecreaseImageQuality
+        /// <summary>
+        /// Saves image with decrease  quality.
+        /// </summary>
+        /// <param name="path">The path.</param>
+        /// <param name="img">The img.</param>
+        /// <param name="quality">The quality.</param>
+        /// <exception cref="ArgumentOutOfRangeException">quality must be between 0 and 100.</exception>
+        public static void SaveDecreaseImageQuality(string path, Image img, int quality)
+        {
+            if (quality < 0 || quality > 100)
+                throw new ArgumentOutOfRangeException("quality must be between 0 and 100.");
+
+            // Encoder parameter for image quality 
+            EncoderParameter qualityParam = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+            // JPEG image codec 
+            ImageCodecInfo jpegCodec = GetEncoderInfo("image/jpeg");
+            EncoderParameters encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = qualityParam;
+            img.Save(path, jpegCodec, encoderParams);
+        }
+        #endregion
+
+        #region Crop
+        public static Bitmap AutoCrop(Bitmap bmp)
+        {
+            int w = bmp.Width;
+            int h = bmp.Height;
+
+            Func<int, bool> allWhiteRow = row =>
+            {
+                for (int i = 0; i < w; ++i)
+                    if (bmp.GetPixel(i, row).R != 255)
+                        return false;
+                return true;
+            };
+
+            Func<int, bool> allWhiteColumn = col =>
+            {
+                for (int i = 0; i < h; ++i)
+                    if (bmp.GetPixel(col, i).R != 255)
+                        return false;
+                return true;
+            };
+
+            int topmost = 0;
+            for (int row = 0; row < h; ++row)
+            {
+                if (allWhiteRow(row))
+                    topmost = row;
+                else break;
+            }
+
+            int bottommost = 0;
+            for (int row = h - 1; row >= 0; --row)
+            {
+                if (allWhiteRow(row))
+                    bottommost = row;
+                else break;
+            }
+
+            int leftmost = 0, rightmost = 0;
+            for (int col = 0; col < w; ++col)
+            {
+                if (allWhiteColumn(col))
+                    leftmost = col;
+                else
+                    break;
+            }
+
+            for (int col = w - 1; col >= 0; --col)
+            {
+                if (allWhiteColumn(col))
+                    rightmost = col;
+                else
+                    break;
+            }
+
+            if (rightmost == 0) rightmost = w; // As reached left
+            if (bottommost == 0) bottommost = h; // As reached top.
+
+            int croppedWidth = rightmost - leftmost;
+            int croppedHeight = bottommost - topmost;
+
+            if (croppedWidth == 0) // No border on left or right
+            {
+                leftmost = 0;
+                croppedWidth = w;
+            }
+
+            if (croppedHeight == 0) // No border on top or bottom
+            {
+                topmost = 0;
+                croppedHeight = h;
+            }
+
+            try
+            {
+                var target = new Bitmap(croppedWidth, croppedHeight);
+                using (Graphics g = Graphics.FromImage(target))
+                {
+                    g.DrawImage(bmp,
+                      new RectangleF(0, 0, croppedWidth, croppedHeight),
+                      new RectangleF(leftmost, topmost, croppedWidth, croppedHeight),
+                      GraphicsUnit.Pixel);
+                }
+                return target;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(
+                  string.Format("Values are topmost={0} btm={1} left={2} right={3} croppedWidth={4} croppedHeight={5}", topmost, bottommost, leftmost, rightmost, croppedWidth, croppedHeight),
+                  ex);
+            }
+        }
+        #endregion
+
+
+        #region GetRGBFromBitmap
+        public static byte[][] GetRGBFromBitmap(Bitmap bmp)
+        {
+            BitmapData bmp_data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            IntPtr ptr = bmp_data.Scan0;
+            int ct = 1;
+            int num_pixels = (bmp.Width * bmp.Height);
+            int num_bytes = (bmp_data.Stride * bmp.Height);
+            int padding = (bmp_data.Stride
+                        - (bmp.Width * 3));
+            int i = 0;
+            byte[] rgb = new byte[num_bytes - 1];
+            byte[] r = new byte[num_pixels - 1];
+            byte[] g = new byte[num_pixels - 1];
+            byte[] b = new byte[num_pixels - 1];
+
+            System.Runtime.InteropServices.Marshal.Copy(ptr, rgb, 0, num_bytes);
+            for (int x = 0; (x <= (num_bytes - 4)); x = (x + 3))
+            {
+                if ((x == ((bmp_data.Stride * ct) - padding)))
+                {
+                    x = (x + padding);
+                    ct++;
+                }
+
+                r[i] = rgb[x];
+                g[i] = rgb[(x + 1)];
+                b[i] = rgb[(x + 2)];
+                i++;
+            }
+
+            bmp.UnlockBits(bmp_data);
+            return new byte[3][] { r, g, b };
+
+        }
+        #endregion
+
+
+   
+        #region GetFilterSafeText
+        public static string GetFilterSafeText(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+            else
+                return text.Replace("'", "''");
+        }
+        #endregion
+
+    
+
+        #region DeleteFile
+        public static bool DeleteFile(string FilePath)
+        {
+            try
+            {
+                if (System.IO.File.Exists(FilePath))
+                {
+                    System.IO.File.Delete(FilePath);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+     
+
+        public static string ConvertNumbertoWords(long number)
+        {
+            if (number == 0) return "ZERO";
+            if (number < 0) return "minus " + ConvertNumbertoWords(Math.Abs(number));
+            string words = "";
+            if ((number / 1000000) > 0)
+            {
+                words += ConvertNumbertoWords(number / 100000) + " LAKES ";
+                number %= 1000000;
+            }
+            if ((number / 1000) > 0)
+            {
+                words += ConvertNumbertoWords(number / 1000) + " THOUSAND ";
+                number %= 1000;
+            }
+            if ((number / 100) > 0)
+            {
+                words += ConvertNumbertoWords(number / 100) + " HUNDRED ";
+                number %= 100;
+            }
+            //if ((number / 10) > 0)  
+            //{  
+            // words += ConvertNumbertoWords(number / 10) + " RUPEES ";  
+            // number %= 10;  
+            //}  
+            if (number > 0)
+            {
+                if (words != "") words += "AND ";
+                var unitsMap = new[]
+        {
+            "ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"
+        };
+                var tensMap = new[]
+        {
+            "ZERO", "TEN", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"
+        };
+                if (number < 20) words += unitsMap[number];
+                else
+                {
+                    words += tensMap[number / 10];
+                    if ((number % 10) > 0) words += " " + unitsMap[number % 10];
+                }
+            }
+            return words;
+        }
+
+        public static string ConvertNumbertoWords(double number)
+        {
+            long var1 = ConvertToInt64(number.ToString().Split('.')[0]);
+            long var2 = 0;
+            if (number.ToString().Split('.').Length > 1)
+                var2 = ConvertToInt64(number.ToString().Split('.')[1]);
+
+            string words = "";
+            words = ConvertNumbertoWords(var1);
+            if (var2 > 0)
+                words += " AND " + ConvertNumbertoWords(var2) + " PAISA ";
+
+            return words;
+        }
+
+  
+        #region PropertySet
+        public static void PropertySet(object p, string propName, object value)
+        {
+            Type t = p.GetType();
+            PropertyInfo info = t.GetProperty(propName);
+            try
+            {
+                if (info == null)
+                    return;
+                if (!info.CanWrite)
+                    return;
+
+                if (value is DBNull)
+                    value = null;
+
+                if (!Utility.IsNullOrDBNull(value) && value is DateTime && info.PropertyType == typeof(string))
+                {
+                    info.SetValue(p, Utility.ConvertToDateTime(value).ToString("dd/MM/yyyy"), null);
+                    return;
+                }
+                else if (value != null && (value is string) == false && info.PropertyType == typeof(string))
+                {
+                    info.SetValue(p, value.ToString(), null);
+                    return;
+                }
+                else if (value != null && (value is Decimal) == true && info.PropertyType == typeof(double))
+                {
+                    info.SetValue(p, Utility.ConvertToDouble(value), null);
+                    return;
+                }
+                else if (value != null && (value is double) == true && info.PropertyType == typeof(decimal))
+                {
+                    info.SetValue(p, Utility.ConvertToDecimal(value), null);
+                    return;
+                }
+
+
+                info.SetValue(p, value, null);
+            }
+            catch (Exception ex)
+            {
+                throw new AlpException(string.Format("Error on set property name : '{0}' and value '{1}'{2}", propName, value, Environment.NewLine + ex.Message));
+            }
+        }
+        #endregion
+
+    
+        #region IsUniCodeMessage
+        public static Boolean IsUniCodeMessage(string strMessage)
+        {
+            foreach (char c in strMessage)
+            {
+                if (((int)c) >= 256)
+                    return true;
+            }
+            return false;
+        }
+        #endregion
+
+        #region GetSMSLength
+        public static int GetNoOfSMSLength(ref string SMSText, out int Length)
+        {
+
+            int NewLength = 0;
+            if (SMSText.Length > 800)
+                SMSText = SMSText.Substring(0, 800);
+
+            char[] temp = SMSText.ToArray();
+
+            List<char> lst = new List<char>();
+            for (int i = 0; i < temp.Length; i++)
+            {
+                #region Checking
+                if (((temp[i] >= 58) && (temp[i] <= 90)) //if capital alphabet
+                        || ((temp[i] >= 97) && (temp[i] <= 122)) //if small alphabet
+                        || ((temp[i] >= 32) && (temp[i] <= 57)) //if no is found
+                        || (temp[i] == 13)    //_
+                        || (temp[i] == 10)    //_
+                        || (temp[i] == 95)    //_
+                        || (temp[i] == 156)    //£
+                        || (temp[i] == 157)    //"¥"
+                        || (temp[i] == 164)    //"¤"
+                        || (temp[i] == 167)    //"§
+                        || (temp[i] == 168)    //"¿
+                        || (temp[i] == 246)    //"ö
+                        || (temp[i] == 230)    //"æ
+                        || (temp[i] == 198)    //"Æ
+                        || (temp[i] == 242)    //"ò"
+                        || (temp[i] == 249)    //"ù 
+                        || (temp[i] == 214)    //"Ö"
+                        || (temp[i] == 220)    //"Ü
+                        || (temp[i] == 241)    //"ñ
+                        || (temp[i] == 209)    //"Ñ
+                        || (temp[i] == 232)    //"è
+                        || (temp[i] == 233)    //"é
+                        || (temp[i] == 236)    //"ì
+                        || (temp[i] == 199)    //"Ç"
+                        || (temp[i] == 216)    //"Ø
+                        || (temp[i] == 248)    //"ø
+                        || (temp[i] == 197)    //"Å
+                        || (temp[i] == 229)
+                    )
+                {
+
+                    NewLength++;
+                    lst.Add(temp[i]);
+                }
+                else if (temp[i] == 238
+                        || (temp[i] == 91)    //[
+                        || (temp[i] == 93)    //]
+                        || (temp[i] == 123)    //{
+                        || (temp[i] == 125)    //}
+                        || (temp[i] == 92)   //"\
+                        || (temp[i] == 126)    //~
+                        || (temp[i] == 94)    //^
+                        || (temp[i] == 124)    //|
+                    )    //"€" db
+                {
+                    NewLength += 2;
+                    lst.Add(temp[i]);
+                }
+                else
+                {
+                    if (temp[i] >= 0 && temp[i] <= 255)
+                    {
+                        NewLength++;
+                        lst.Add(temp[i]);
+                    }
+                }
+                #endregion
+            }
+            SMSText = string.Join("", lst.ToArray());
+
+
+
+            int SMSQty = 0;
+            if (NewLength >= 800)
+                SMSQty = 6;
+            else if (NewLength >= 765)
+                SMSQty = 6;
+            else if (NewLength >= 612)
+                SMSQty = 5;
+            else if (NewLength >= 459)
+                SMSQty = 4;
+            else if (NewLength >= 306)
+                SMSQty = 3;
+            else if (NewLength >= 161)
+                SMSQty = 2;
+            else if (NewLength >= 1)
+                SMSQty = 1;
+
+            Length = NewLength;
+            return SMSQty;
+        }
+        #endregion
+
+        #region GetNoOfSMSLengthUniCode
+        public static int GetNoOfSMSLengthUniCode(ref string SMSText, out int Length)
+        {
+
+            int NewLength = 0;
+            if (SMSText.Length > 600)
+                SMSText = SMSText.Substring(0, 600);
+
+            NewLength = SMSText.Length;
+
+
+            int SMSQty = 0;
+            if (NewLength >= 537)
+                SMSQty = 9;
+            else if (NewLength >= 469)
+                SMSQty = 8;
+            else if (NewLength >= 403)
+                SMSQty = 7;
+            else if (NewLength >= 459)
+                SMSQty = 4;
+            else if (NewLength >= 335)
+                SMSQty = 6;
+            else if (NewLength >= 268)
+                SMSQty = 5;
+            else if (NewLength >= 201)
+                SMSQty = 4;
+            else if (NewLength >= 134)
+                SMSQty = 3;
+            else if (NewLength >= 71)
+                SMSQty = 2;
+            else if (NewLength >= 1)
+                SMSQty = 1;
+
+            Length = NewLength;
+            return SMSQty;
+        }
+        #endregion
+
+        #region IsDataColumnNumeric
+        /// <summary>
+        /// Check Data Type Is Numeric 
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns>System.Bool</returns>
+
+        public static bool IsDataColumnNumeric(DataColumn dc)
+        {
+            if (dc.DataType == typeof(Int32) || dc.DataType == typeof(Int64) || dc.DataType == typeof(double) || dc.DataType == typeof(Decimal) || dc.DataType == typeof(Single) || dc.DataType == typeof(Int16))
+            {
+                return true;
+            }
+            return false;
+        }
+        #endregion
+
+
+        #region SpliteCamelCase
+        public static string SpliteCamelCase(string Word)
+        {
+            //StringBuilder result = new StringBuilder();
+            //foreach (var ch in Word)
+            //{
+            //    if (char.IsUpper(ch) && result.Length > 0)
+            //    {
+            //        result.Append(' ');
+            //    }
+            //    result.Append(ch);
+            //}
+            //return result.ToString();
+            return System.Text.RegularExpressions.Regex.Replace(Word, "(?<=[a-z])([A-Z])", " $1", System.Text.RegularExpressions.RegexOptions.Compiled).Trim();
+        }
+        #endregion
+
+    
+        #region GetUNCPath
+        public static string GetUNCPath(string path)
+        {
+            try
+            {
+                if (path.StartsWith(@"\\"))
+                {
+                    return path;
+                }
+                return _GetUNCPath(path);
+            }
+            catch (Exception ex)
+            {
+                Common.ErrorMgmt.AddError(ex);
+                return path;
+            }
+        }
+
+    
+        #region ReplaceText
+        /// <summary>
+        /// Replace Text from DataRow
+        /// </summary>
+        /// <param name="Text"></param>
+        /// <param name="dr"></param>
+        /// <returns></returns>
+        public static string ReplaceText(string Text, DataRow dr)
+        {
+            foreach (DataColumn dc in dr.Table.Columns)
+            {
+                if (dc.ColumnName.ToLower().EndsWith("wt") || dc.ColumnName.ToLower().EndsWith("weight"))
+                {
+                    Text = Text.Replace("[" + dc.ColumnName + "]", Utility.ConvertToDouble(dr[dc]).ToString("0.000"));
+                }
+                else if (dc.ColumnName.ToLower().EndsWith("amt") || dc.ColumnName.ToLower().EndsWith("amount"))
+                {
+                    Text = Text.Replace("[" + dc.ColumnName + "]", Utility.ConvertToDouble(dr[dc]).ToString("0"));
+                }
+                else if (dc.DataType == typeof(DateTime))
+                {
+                    if (Utility.IsDate(dr[dc]))
+                        Text = Text.Replace("[" + dc.ColumnName + "]", Utility.ConvertToDateTime(dr[dc]).ToString("dd/MM/yyyy"));
+                    else
+                        Text = Text.Replace("[" + dc.ColumnName + "]", "");
+                }
+                else
+                    Text = Text.Replace("[" + dc.ColumnName + "]", Convert.ToString(dr[dc]));
+            }
+            return Text;
+        }
+        /// <summary>
+        /// Replace Text from object
+        /// </summary>
+        /// <param name="Text"></param>
+        /// <param name="dr"></param>
+        /// <returns></returns>
+        public static string ReplaceText(string Text, object parameters)
+        {
+            if (parameters != null)
+            {
+                foreach (var prop in parameters.GetType().GetProperties())
+                {
+                    string propname = prop.Name.ToLower();
+                    if (propname.EndsWith("wt") || propname.EndsWith("weight"))
+                    {
+                        Text = Text.Replace("[" + prop.Name + "]", Utility.ConvertToDouble(prop.GetValue(parameters, null)).ToString("0.000"));
+                    }
+                    else if (propname.EndsWith("amt") || propname.EndsWith("amount"))
+                    {
+                        Text = Text.Replace("[" + prop.Name + "]", Utility.ConvertToDouble(prop.GetValue(parameters, null)).ToString("0"));
+                    }
+                    else if (prop.GetType() == typeof(DateTime))
+                    {
+                        if (Utility.IsDate(prop.GetValue(parameters, null)))
+                            Text = Text.Replace("[" + prop.Name + "]", Utility.ConvertToDateTime(prop.GetValue(parameters, null)).ToString("dd/MM/yyyy"));
+                        else
+                            Text = Text.Replace("[" + prop.Name + "]", "");
+                    }
+                    else
+                        Text = Text.Replace("[" + prop.Name + "]", Convert.ToString(prop.GetValue(parameters, null)));
+                }
+            }
+            return Text;
+        }
+
+
+        /// <summary>
+        /// Replace Text from object
+        /// </summary>
+        /// <param name="Text"></param>
+        /// <param name="dr"></param>
+        /// <returns></returns>
+        public static string ReplaceText(string Text, Hashtable ht)
+        {
+            if (ht != null)
+            {
+                foreach (string key in ht.Keys)
+                {
+                    string propname = key;
+                    if (propname.EndsWith("wt") || propname.EndsWith("weight"))
+                    {
+                        Text = Text.Replace("[" + key + "]", Utility.ConvertToDouble(ht[key]).ToString("0.000"));
+                    }
+                    else if (propname.EndsWith("amt") || propname.EndsWith("amount"))
+                    {
+                        Text = Text.Replace("[" + key + "]", Utility.ConvertToDouble(ht[key]).ToString("0"));
+                    }
+                    else if (ht[key] == typeof(DateTime))
+                    {
+                        if (Utility.IsDate(ht[key]))
+                            Text = Text.Replace("[" + key + "]", Utility.ConvertToDateTime(ht[key]).ToString("dd/MM/yyyy"));
+                        else
+                            Text = Text.Replace("[" + key + "]", "");
+                    }
+                    else
+                        Text = Text.Replace("[" + key + "]", Convert.ToString(ht[key]));
+                }
+            }
+            return Text;
+        }
+
+        #endregion
+
+        #region GetDateAgo
+        public static string GetDateAgo(DateTime dt, string SinceOrAgo = "ago")
+        {
+            string Since = (SinceOrAgo == "Since") ? SinceOrAgo + " " : "";
+            string Ago = (SinceOrAgo != "Since") ? " " + SinceOrAgo : "";
+
+            TimeSpan ts = DateTime.Now.Subtract(dt);
+            if (dt == DateTime.MinValue)
+                return string.Format("Never");
+            else if (ts.TotalDays / 30 / 12 >= 1)
+                return string.Format("{1}{0} years{2}", (ts.TotalDays / 30 / 12).ToString("0"), Since, Ago);
+            else if (ts.TotalDays / 30 >= 1)
+                return string.Format("{1}{0} months{2}", (ts.TotalDays / 30).ToString("0"), Since, Ago);
+            else if (ts.TotalDays >= 1)
+                return string.Format("{1}{0} days{2}", ts.TotalDays.ToString("0"), Since, Ago);
+            else if (ts.TotalHours >= 1)
+                return string.Format("{1}{0} hours{2}", ts.TotalHours.ToString("0"), Since, Ago);
+            else if (ts.TotalMinutes >= 1)
+                return string.Format("{1}{0} minutes{2}", ts.TotalMinutes.ToString("0"), Since, Ago);
+            else if (ts.TotalSeconds >= 0)
+                return string.Format(" Now");
+            else
+                return "";
+        }
+        #endregion
+
+        #region ConvertToJsonString
+        /// <summary>
+        /// Created By Chirag 21 11 2019
+        /// </summary>
+        /// <param name="text"></param>
+        /// <returns></returns>
+        public static string ConvertToJsonString(object obj)
+        {
+            System.Web.Script.Serialization.JavaScriptSerializer serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+            serializer.MaxJsonLength = Int32.MaxValue;
+            return serializer.Serialize(obj);
+        }
+        #endregion
+
+        #region CompressStringUsingGZip
+        /// <summary>
+        /// Created By Chirag 21 11 2019
+        /// </summary>
+        /// <param name="text"></param>
+        /// <returns></returns>
+        public static byte[] CompressStringUsingGZip(string text)
+        {
+            byte[] buffer = Encoding.ASCII.GetBytes(text);
+            MemoryStream ms = new MemoryStream();
+            using (GZipStream zip = new GZipStream(ms, CompressionMode.Compress, true))
+            {
+                zip.Write(buffer, 0, buffer.Length);
+            }
+
+            ms.Position = 0;
+            MemoryStream outStream = new MemoryStream();
+
+            byte[] compressed = new byte[ms.Length];
+            ms.Read(compressed, 0, compressed.Length);
+
+            byte[] gzBuffer = new byte[compressed.Length + 4];
+            //System.Buffer.BlockCopy(compressed, 0, gzBuffer, 4, compressed.Length);
+            //System.Buffer.BlockCopy(BitConverter.GetBytes(buffer.Length), 0, gzBuffer, 0, 4);
+            //return Convert.ToBase64String(compressed);
+            return compressed;
+        }
+        #endregion
+
+        #region CompressFileUsingGZip
+        /// <summary>
+        /// Created By Chirag 21 11 2019
+        /// </summary>
+        /// <param name="text"></param>
+        /// <returns></returns>
+        public static byte[] CompressFileUsingGZip(string FilePath)
+        {
+            byte[] buffer = System.IO.File.ReadAllBytes(FilePath);
+            MemoryStream ms = new MemoryStream();
+            using (GZipStream zip = new GZipStream(ms, CompressionMode.Compress, true))
+            {
+                zip.Write(buffer, 0, buffer.Length);
+            }
+
+            ms.Position = 0;
+            MemoryStream outStream = new MemoryStream();
+
+            byte[] compressed = new byte[ms.Length];
+            ms.Read(compressed, 0, compressed.Length);
+
+            byte[] gzBuffer = new byte[compressed.Length + 4];
+            //System.Buffer.BlockCopy(compressed, 0, gzBuffer, 4, compressed.Length);
+            //System.Buffer.BlockCopy(BitConverter.GetBytes(buffer.Length), 0, gzBuffer, 0, 4);
+            //return Convert.ToBase64String(compressed);
+            return compressed;
+        }
+        #endregion
+
+        #region DeCompressUsingGZip
+        public static byte[] DeCompressUsingGZip(byte[] data)
+        {
+            using (var compressedStream = new MemoryStream(data))
+            using (var zipStream = new GZipStream(compressedStream, CompressionMode.Decompress))
+            using (var resultStream = new MemoryStream())
+            {
+                zipStream.CopyTo(resultStream);
+                return resultStream.ToArray();
+            }
+        }
+        #endregion
+
+     
+        #region CurrencyConvertor
+        /// <summary>
+        /// Currency Convertor
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="type"></param>
+        /// <param name="Decimals"></param>
+        /// <returns></returns>
+        public static double CurrencyConvertor(double value, CurrencyType type, int Decimals)
+        {
+            if (type == CurrencyType.Thousands)
+                return Math.Round(value / 1000, Decimals);
+            else if (type == CurrencyType.Lakhs)
+                return Math.Round(value / 100000, Decimals);
+            else if (type == CurrencyType.Millions)
+                return Math.Round(value / 1000000, Decimals);
+            else if (type == CurrencyType.Crores)
+                return Math.Round(value / 10000000, Decimals);
+            else if (type == CurrencyType.Billions)
+                return Math.Round(value / 100000000, Decimals);
+            else
+                return value;
+        }
+        #endregion
+
+
+        public static void DeleteDirectory(string DirectoryName)
+        {
+            int RetryCount = 1;
+            retry:
+            if (System.IO.Directory.Exists(DirectoryName))
+            {
+                try
+                {
+                    System.IO.Directory.Delete(DirectoryName, true);
+                }
+                catch (Exception ex)
+                {
+                    if (RetryCount <= 3)
+                    {
+                        RetryCount += 1;
+                        goto retry;
+                    }
+                    else
+                        throw;
+                }
+            }
+        }
+
+        #region IsNetworkError
+        public static bool IsNetworkError(Exception ex)
+        {
+            if (ex.Message.Contains("A network-related or instance-specific error occurred while establishing a connection to SQL Server"))
+            {
+                return true;
+            }
+            else if (ex.Message.Contains("A transport-level error has occurred when receiving results from the server."))
+            {
+                return true;
+            }
+            else if (ex.Message.Contains("Connection Timeout Expired.  The timeout period elapsed while attempting to consume the pre-login handshake acknowledgement"))
+            {
+                return true;
+            }
+            else if (ex.Message.Contains("Timeout expired.  The timeout period elapsed prior to completion of the operation or the server is not responding"))
+            {
+                return true;
+            }
+            else
+                return false;
+        }
+        #endregion
+
+        #region CanReadFile
+        const int ERROR_SHARING_VIOLATION = 32;
+        const int ERROR_LOCK_VIOLATION = 33;
+
+        private static bool IsFileLocked(Exception exception)
+        {
+            int errorCode = Marshal.GetHRForException(exception) & ((1 << 16) - 1);
+            return errorCode == ERROR_SHARING_VIOLATION || errorCode == ERROR_LOCK_VIOLATION;
+        }
+
+        public static bool CanReadFile(string filePath)
+        {
+            //Try-Catch so we dont crash the program and can check the exception
+            try
+            {
+                //The "using" is important because FileStream implements IDisposable and
+                //"using" will avoid a heap exhaustion situation when too many handles  
+                //are left undisposed.
+                using (FileStream fileStream = File.Open(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    if (fileStream != null) fileStream.Close();  //This line is me being overly cautious, fileStream will never be null unless an exception occurs... and I know the "using" does it but its helpful to be explicit - especially when we encounter errors - at least for me anyway!
+                }
+            }
+            catch (IOException ex)
+            {
+                //THE FUNKY MAGIC - TO SEE IF THIS FILE REALLY IS LOCKED!!!
+                if (IsFileLocked(ex))
+                {
+                    // do something, eg File.Copy or present the user with a MsgBox - I do not recommend Killing the process that is locking the file
+                    return false;
+                }
+            }
+            finally
+            { }
+            return true;
+        }
+        #endregion
+
+
+        #region PingToIP
+        public static bool PingToIP(string IP)
+        {
+            Ping pinger = null;
+            try
+            {
+                pinger = new Ping();
+                PingReply reply = pinger.Send(IP, 1500);
+                if (reply.Status == IPStatus.Success)
+                    return true;
+                else
+                    return false;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Pin fail.." + ex.Message);
+                return false;
+            }
+            finally
+            {
+                if (pinger != null)
+                    pinger.Dispose();
+            }
+        }
+        #endregion
+
+        #region DataRowTojSon
+        /// <summary>
+        /// For convert datarow to json string
+        /// Create by :Chirag
+        /// Create Date : 16 10 2020
+        /// </summary>
+        /// <param name="row"></param>
+        /// <returns></returns>
+        public static string DataRowTojSon(DataRow row)
+        {
+            JavaScriptSerializer jsSerializer = new JavaScriptSerializer();
+            Dictionary<string, object> childRow;
+
+            childRow = new Dictionary<string, object>();
+            foreach (DataColumn col in row.Table.Columns)
+            {
+                childRow.Add(col.ColumnName, row[col]);
+            }
+
+
+            return jsSerializer.Serialize(childRow);
+        }
+        public static string DataRowTojSonDate(DataRow row)
+        {
+            JavaScriptSerializer jsSerializer = new JavaScriptSerializer();
+            Dictionary<string, object> childRow;
+
+            childRow = new Dictionary<string, object>();
+            foreach (DataColumn col in row.Table.Columns)
+            {
+                object value = row[col];
+                if (col.DataType == typeof(DateTime) || col.DataType == typeof(DateTime?))
+                {
+                    if (value != DBNull.Value)
+                    {
+                        value = ((DateTime)value).ToString("yyyy-MM-dd HH:mm:ss.fff");
+                    }
+                    else
+                    {
+                        value = null;
+                    }
+                }
+                childRow.Add(col.ColumnName, value);
+            }
+
+            return jsSerializer.Serialize(childRow);
+        }
+        #endregion
+
+
+        #region DataRowTojSon
+        /// <summary>
+        /// For convert datatable to json string
+        /// Create by :Chirag
+        /// Create Date : 30 11 2021
+        /// </summary>
+        /// <param name="dt"></param>
+        /// <returns></returns>
+        public static string DataTableToJSon(DataTable dt)
+        {
+            JavaScriptSerializer jsSerializer = new JavaScriptSerializer();
+            List<Dictionary<string, object>> parentRow = new List<Dictionary<string, object>>();
+            Dictionary<string, object> childRow;
+            foreach (DataRow row in dt.Rows)
+            {
+                childRow = new Dictionary<string, object>();
+                foreach (DataColumn col in dt.Columns)
+                {
+                    childRow.Add(col.ColumnName, row[col]);
+                }
+                parentRow.Add(childRow);
+            }
+            string json = jsSerializer.Serialize(parentRow);
+
+            return json;
+        }
+        #endregion
+
+        #region DataRowTojSon
+        /// <summary>
+        /// For convert datatable to DataTableDictionary
+        /// Create by :Chirag
+        /// Create Date : 22 06 2023
+        /// </summary>
+        /// <param name="dt"></param>
+        /// <returns></returns>
+        public static List<Dictionary<string, object>> DataTableDictionary(DataTable dt)
+        {
+            List<Dictionary<string, object>> parentRow = new List<Dictionary<string, object>>();
+            Dictionary<string, object> childRow;
+            foreach (DataRow row in dt.Rows)
+            {
+                childRow = new Dictionary<string, object>();
+                foreach (DataColumn col in dt.Columns)
+                {
+                    childRow.Add(col.ColumnName, row[col]);
+                }
+                parentRow.Add(childRow);
+            }
+            return parentRow;
+        }
+        #endregion
+
+
+ 
+
+
+
+        public static bool OpenFile(string ImagePath)
+        {
+            if (!Utility.IsNullOrDBNullorBlank(ImagePath) && File.Exists(ImagePath))
+            {
+                Process.Start(ImagePath);
+                return true;
+            }
+            return false;
+
+        }
+        public struct DateTimeSpan
+        {
+            public int Years { get; }
+            public int Months { get; }
+            public int Days { get; }
+            public int Hours { get; }
+            public int Minutes { get; }
+            public int Seconds { get; }
+            public int Milliseconds { get; }
+
+            public DateTimeSpan(int years, int months, int days, int hours, int minutes, int seconds, int milliseconds)
+            {
+                Years = years;
+                Months = months;
+                Days = days;
+                Hours = hours;
+                Minutes = minutes;
+                Seconds = seconds;
+                Milliseconds = milliseconds;
+            }
+
+            enum Phase { Years, Months, Days, Done }
+
+            public static DateTimeSpan CompareDates(DateTime date1, DateTime date2)
+            {
+                if (date2 < date1)
+                {
+                    var sub = date1;
+                    date1 = date2;
+                    date2 = sub;
+                }
+
+                DateTime current = date1;
+                int years = 0;
+                int months = 0;
+                int days = 0;
+
+                Phase phase = Phase.Years;
+                DateTimeSpan span = new DateTimeSpan();
+                int officialDay = current.Day;
+
+                while (phase != Phase.Done)
+                {
+                    switch (phase)
+                    {
+                        case Phase.Years:
+                            if (current.AddYears(years + 1) > date2)
+                            {
+                                phase = Phase.Months;
+                                current = current.AddYears(years);
+                            }
+                            else
+                            {
+                                years++;
+                            }
+                            break;
+                        case Phase.Months:
+                            if (current.AddMonths(months + 1) > date2)
+                            {
+                                phase = Phase.Days;
+                                current = current.AddMonths(months);
+                                if (current.Day < officialDay && officialDay <= DateTime.DaysInMonth(current.Year, current.Month))
+                                    current = current.AddDays(officialDay - current.Day);
+                            }
+                            else
+                            {
+                                months++;
+                            }
+                            break;
+                        case Phase.Days:
+                            if (current.AddDays(days + 1) > date2)
+                            {
+                                current = current.AddDays(days);
+                                var timespan = date2 - current;
+                                span = new DateTimeSpan(years, months, days, timespan.Hours, timespan.Minutes, timespan.Seconds, timespan.Milliseconds);
+                                phase = Phase.Done;
+                            }
+                            else
+                            {
+                                days++;
+                            }
+                            break;
+                    }
+                }
+
+                return span;
+            }
+        }
+
+   
+        #region CheckFolderWritePermission
+        public static bool CheckFolderWritePermission(string dirPath)
+        {
+            try
+            {
+                using (FileStream fs = File.Create(
+                    Path.Combine(dirPath,
+                        Path.GetRandomFileName()
+                    ),
+                    1,
+                    FileOptions.DeleteOnClose)
+                )
+                { }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region IsImageFile
+        public static bool IsImageFile(string FileName)
+        {
+            if (Utility.IsNullOrDBNullorBlank(FileName))
+                return false;
+            else
+            {
+                string Extension = Path.GetExtension(FileName);
+                if (Extension.ToUpper() == ".JPG" || Extension.ToUpper() == ".JPEG" || Extension.ToUpper() == ".PNG")
+                {
+                    return true;
+                }
+                else
+                    return false;
+            }
+        }
+        #endregion
+
+
+        #region GetMyIPAddress
+        public static string GetMyIPAddress()
+        {
+            IPHostEntry host = Dns.GetHostEntry(Environment.MachineName);
+            if (host != null)
+            {
+                foreach (IPAddress ip in host.AddressList)
+                {
+                    if (ip != null)
+                    {
+                        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        {
+                            return ip.ToString();
+                            break;
+                        }
+                    }
+                }
+            }
+            return "";
+
+        }
+        #endregion
+
+
+
+        public static void WriteLog(string log, string fname)
+        {
+            try
+            {
+                string dir = AppDomain.CurrentDomain.BaseDirectory + "\\log\\";
+
+                if ((!Directory.Exists(dir)))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                StreamWriter writer = default(StreamWriter);
+                using (writer = new StreamWriter(dir + fname, true))
+                {
+                    writer.WriteLine(DateTime.Now.ToString() + " - " + Environment.NewLine + log);
+                    writer.WriteLine("------------------------------------------------------");
+                    writer.Close();
+                }
+                //}
+            }
+            catch (Exception ex)
+            {
+
+            }
+            finally
+            {
+
+            }
+        }
+
+
+        /// <summary>
+        /// Converts List to DataTable.
+        /// </summary>
+        /// <param name="list">The value.</param>
+        /// <returns>DataTable.</returns>
+
+        public static DataTable ConvertListToDataTable(List<Dictionary<string, object>> list)
+        {
+            if (list == null || list.Count == 0)
+                return null;//throw new ArgumentException("List cannot be null or empty.");
+
+            DataTable table = new DataTable();
+
+            try
+            {
+
+
+                if (list.Count == 0)
+                    return table;
+
+                // Create columns based on the keys of the first dictionary
+                foreach (var key in list[0].Keys)
+                {
+                    table.Columns.Add(key);
+                }
+
+                // Add rows to the DataTable
+                foreach (var dict in list)
+                {
+                    DataRow row = table.NewRow();
+                    foreach (var kvp in dict)
+                    {
+                        row[kvp.Key] = kvp.Value ?? DBNull.Value;
+                    }
+                    table.Rows.Add(row);
+                }
+
+
+            }
+            catch (Exception ex)
+            {
+                // Handle specific exceptions or log the error
+                Console.WriteLine($"Error occurred while converting list to DataTable: {ex.Message}");
+                throw; // Re-throw the exception to propagate it further
+            }
+
+            return table;
+        }
+
+        /// <summary>
+        /// Converts DataTable to byte[].
+        /// </summary>
+        /// <param name="dt">The value.</param>
+        /// <returns>byte[].</returns>
+        public static byte[] ConvertDataTableToByteArray(DataTable dt)
+        {
+            if (dt == null || dt.Rows.Count == 0)
+                return null;
+
+            BinaryFormatter binaryFormatter = new BinaryFormatter();
+
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                binaryFormatter.Serialize(memoryStream, dt);
+                return memoryStream.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Converts byte[] to DataTable.
+        /// </summary>
+        /// <param name="byteArray">The value.</param>
+        /// <returns>DataTable.</returns>
+        public static DataTable ConvertByteArrayToDataTable(byte[] byteArray)
+        {
+            // Return null if byteArray is null or empty
+            if (byteArray == null || byteArray.Length == 0)
+                return null;
+
+            BinaryFormatter binaryFormatter = new BinaryFormatter();
+
+            using (MemoryStream memoryStream = new MemoryStream(byteArray))
+            {
+                return (DataTable)binaryFormatter.Deserialize(memoryStream);
+            }
+        }
+
+        /// <summary>
+        /// Converts String to ByteArray.
+        /// </summary>
+        /// <param name="str">The value.</param>
+        /// <returns>String.</returns>
+        public static byte[] ConvertStringToByteArray(string str)
+        {
+            if (string.IsNullOrEmpty(str))
+                return null;
+
+            return Encoding.UTF8.GetBytes(str); // Convert string to byte array using UTF-8 encoding
+        }
+
+        /// <summary>
+        /// Converts ByteArray to String.
+        /// </summary>
+        /// <param name="byteArray">The value.</param>
+        /// <returns>byte[].</returns>
+        public static string ConvertByteArrayToString(byte[] byteArray)
+        {
+            if (byteArray == null || byteArray.Length == 0)
+                return null;
+
+            return Encoding.UTF8.GetString(byteArray); // Convert byte array back to string using UTF-8 encoding
+        }
+    }
+}
