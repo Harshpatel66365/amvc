@@ -1,0 +1,152 @@
+        #region AddEditMaster
+        [HttpPost("AddEditMaster")]
+        public IActionResult AddEditMaster([Required]Entity.Dto.Sync.SyncMasterInput input)
+        {
+            Entity.Dto.Sync.SyncMasterResult result = new Entity.Dto.Sync.SyncMasterResult();
+            try
+            {
+
+                using (SqlCommand cmd = new SqlCommand())
+                {
+                    try
+                    {
+                        foreach (Dictionary<string, object> obj in input.data)
+                        {
+                            DAL.Masters.SyncSQL.AddEdit(cmd, obj, CurrentDevice.VendorID, CurrentDevice.UserID, input.SPName);
+                        }
+
+                        if (cmd.Transaction != null)
+                            cmd.Transaction.Commit();
+                    }
+                    catch (Exception ex)
+                    {
+                        if (cmd.Transaction != null)
+                            cmd.Transaction.Rollback();
+
+                        throw;
+                    }
+                    finally
+                    {
+                        BaseSQLManager.ForceCloseConnection(cmd);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.HandleError(result, ex, "SyncController-AddEditMaster");
+            }
+            return GetActionResult(result);
+
+        }
+        #endregion
+    }
+
+                            DataSet dsALLMyRetalier = GetDataForSyncMyRetailer();
+                            DataTable dtTables = dsALLMyRetalier.Tables[0];
+                            foreach (DataRow dr in dtTables.Rows)
+                            {
+                                string SPName = dr["SPName"].ToAlpString();
+                                int TableIndex = dr["TableIndex"].ToInt();
+                                string TableName = dr["TableName"].ToAlpString();
+                                DataTable dtindex = dsALLMyRetalier.Tables[TableIndex];
+                                if (dtindex.Rows.Count > 0)
+                                {
+                                    exclAPI.AddEditMaster(dtindex, SPName, "AddEditMaster", TableName);
+                                    UpdateMaxDataDate(dtindex, TableName);
+                                }
+                            }
+
+
+
+
+
+
+
+ #region AddEditMaster
+ public void AddEditMaster(DataTable dt, string SPName, string ServiceName, string TableName)
+ {
+     RequestJSon = "";
+     ResponceJSon = "";
+     try
+     {
+         int PendingRecordCount = dt.Rows.Count;
+         int PageNo = 1;
+         while (PendingRecordCount > 0)
+         {
+             int ProcessRecordCount = 0;
+
+             CurrentURI = string.Format("{0}" + MyRetailerAPIURL.AddEditMaster + "{1}", URL, ServiceName);
+             RequestJSon = GetDataTableToJSon(dt, SPName, PageNo, out ProcessRecordCount, TableName);
+             ResponceJSon = ExecuteRequest();
+
+             PageNo += 1;
+             PendingRecordCount -= ProcessRecordCount;
+         }
+
+     }
+     catch (Exception ex)
+     {
+         throw;
+     }
+     finally
+     {
+         CreateLog(SPName);
+     }
+ }
+
+
+
+
+
+
+
+        string GetDataTableToJSon(DataTable dt, string SPName, int PageNo, out int ProcessRecordCount, string TableName)
+        {
+            ProcessRecordCount = 0;
+            int PageSize = 500;
+            int Start = 0, End = 0;
+            Start = ((PageNo - 1) * PageSize) + 1;
+            End = PageNo * PageSize;
+            if (End > dt.Rows.Count)
+                End = dt.Rows.Count;
+
+            Dictionary<string, object> mainObject = new Dictionary<string, object>();
+            List<Dictionary<string, object>> parentRow = new List<Dictionary<string, object>>();
+            Dictionary<string, object> childRow;
+            for (int i = Start; i <= End; i++)
+            {
+                DataRow row = dt.Rows[i - 1];
+                childRow = new Dictionary<string, object>();
+                foreach (DataColumn col in dt.Columns)
+                {
+
+                    try
+                    {
+                        if (col.ColumnName != "DataDate")
+                        {
+                            object colValue = row[col];
+                            if (col.DataType == typeof(DateTime) || col.DataType == typeof(DateTime?))
+                            {
+                                colValue = ((colValue == DBNull.Value) ? null : ((DateTime)colValue).ToString("yyyy-MM-dd HH:mm:ss.fff"));
+                            }
+                            //if (col.ColumnName.StartsWith("Image") || col.ColumnName == "UPIQRCodeImageName" || col.ColumnName == "CoverPageImageName")
+                            //{
+                            //    childRow.Add(col.ColumnName, colValue);
+                            //}
+                            childRow.Add(col.ColumnName, colValue);
+                        }
+                    }
+                    catch (Exception exx)
+                    {
+                        throw;
+                    }
+                }
+                parentRow.Add(childRow);
+                ProcessRecordCount++;
+            }
+            mainObject.Add("data", parentRow);
+            mainObject.Add("SPName", SPName);
+            return Common.Utility.ConvertToJsonString(mainObject);
+        }
+
+        #endregion
