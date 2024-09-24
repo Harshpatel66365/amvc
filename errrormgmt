@@ -1,0 +1,309 @@
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Data.SqlClient;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Core
+{
+    public class ErrorMgmt
+    {
+        #region Veriables
+        public readonly static string ErrorLogDirectory = AppDomain.CurrentDomain.BaseDirectory + "\\log\\";
+        public readonly static string ErrorLogFileName = "ErrorLog.txt";
+        #endregion
+
+        #region Public Shared Sub AddError(ByVal ex As Exception)
+        public static void AddError(Exception ex, string SupportedMessage = "")
+        {
+            AddError(ex, SupportedMessage, "");
+        }
+        public static void AddError(Exception ex, string SupportedMessage, string BaseDirectory = "")
+        {
+            if (ex.Message.Contains("Could not load file or assembly 'CrystalDecisions.Shared, Version=13.0.2000.0"))
+            {
+                return;
+            }
+
+            string msg = "Message : " + ex.Message + Environment.NewLine;
+            if (ex.StackTrace != null)
+            {
+                msg += "StackTrace : " + ex.StackTrace.ToString() + Environment.NewLine;
+            }
+
+            if (ex.InnerException != null)
+            {
+                msg += "Inner Exception : " + ex.InnerException.Message + Environment.NewLine;
+                if (ex.InnerException.InnerException != null)
+                {
+                    msg += "Inner Exception : " + ex.InnerException.InnerException.Message + Environment.NewLine;
+                }
+            }
+            if (SupportedMessage != "")
+            {
+                msg += "SupportedMessage : " + SupportedMessage + Environment.NewLine;
+            }
+            AddError(ex.Message, msg, ex);
+        }
+        #endregion
+
+        #region bgEmailSender_DoWork
+        static void bgEmailSender_DoWork(object sender, DoWorkEventArgs e)
+        {
+            //string MailResponce = EmailClient.SendEmail("do-not-reply@alphaebarcode.com", "AlphaError- Extreme", "DSMFlj#5468sd", "mail.alphaebarcode.com", 25, false, "developer@alphaebarcode.com", "Error in Extreme", Convert.ToString(e.Argument).Replace(Environment.NewLine, "<br>"));
+
+            //if (MailResponce != "")
+            //{
+            //    try
+            //    {
+            //        StreamWriter writer = default(StreamWriter);
+            //        string FileName = "EmailError.txt";
+            //        writer = new StreamWriter(ErrorLogDirectory + FileName , true);
+            //        writer.Write(Environment.NewLine + DateTime.Now.ToString() + " -- " + MailResponce);
+            //        writer.Close();
+            //        writer.Dispose();
+            //    }
+            //    catch (Exception ex)
+            //    {
+
+            //    }
+            //}
+        }
+        #endregion
+
+        #region Public Shared Sub AddError(ByVal strMessage As String, ByVal Description As String)
+        public static void AddError(string strMessage, string Description, Exception ex = null)
+        {
+            try
+            {
+                if ((!Directory.Exists(ErrorLogDirectory)))
+                {
+                    Directory.CreateDirectory(ErrorLogDirectory);
+                }
+
+                try
+                {
+                    //ServerName.ReadSettings(false);
+                    if (strMessage.Contains("creating window handle"))
+                    {
+                        Description += Environment.NewLine + "Total Handles : " + Process.GetCurrentProcess().HandleCount;
+                    }
+                }
+                catch (Exception exHandle)
+                {
+                    Description += Environment.NewLine + "Total Handles : " + exHandle.Message;
+                }
+
+                StringBuilder builder = new StringBuilder();
+                builder.AppendLine("");
+
+                builder.AppendLine("\\**********************************************************************************************\\");
+                try
+                {
+                    builder.AppendLine("Application Path   : " + System.Reflection.Assembly.GetEntryAssembly().Location); //System.Reflection.Assembly.GetExecutingAssembly().Location);
+                }
+                catch (Exception exxx)
+                {
+                    Debug.Write(exxx.Message);
+                }
+                builder.AppendLine("Error Date         : " + DateTime.Now.ToString());
+                builder.AppendLine("Computer Name      : " + Environment.MachineName);
+                builder.AppendLine("User Name          : " + Environment.UserName);
+                builder.AppendLine("Error Message      : " + strMessage);
+                builder.AppendLine("Error Description  : ");
+                builder.AppendLine(Description);
+
+                if (ex != null)
+                {
+                    if (ex is SqlException)
+                    {
+                        SqlException exSQL = (SqlException)ex;
+                        WriteSQLExeception(ref builder, exSQL);
+                    }
+                }
+                builder.AppendLine("\\**********************************************************************************************\\");
+
+
+
+
+                try
+                {
+
+                    SqlCommand cmd = new SqlCommand();
+                    cmd.CommandType = CommandType.Text;
+
+                    cmd.Parameters.AddWithValue("@ErrorMessage", strMessage);
+
+                    cmd.Parameters.AddWithValue("@ComputerName", Environment.MachineName);
+                    cmd.Parameters.AddWithValue("@ComputerUserName", Environment.UserName);
+
+                    string StoreProcedure = "", DBServerName = "";
+                    int SPLineNumber = 0;
+                    if (ex is SqlException)
+                    {
+                        SqlException exSQL = ex as SqlException;
+                        StoreProcedure = exSQL.Procedure;
+                        DBServerName = exSQL.Server;
+                        SPLineNumber = exSQL.LineNumber;
+                    }
+                    cmd.Parameters.AddWithValue("@StoreProcedure", StoreProcedure);
+                    cmd.Parameters.AddWithValue("@DBServerName", DBServerName);
+                    cmd.Parameters.AddWithValue("@SPLineNumber", SPLineNumber);
+
+                    cmd.Parameters.AddWithValue("@AppVersion", "");
+                    try
+                    {
+                        cmd.Parameters.AddWithValue("@AppStartupPath", AppServicesHelper.HttpContext_Current.Request.Path.ToString());
+                    }
+                    catch (Exception exxx)
+                    {
+                        cmd.Parameters.AddWithValue("@AppStartupPath", "");
+                    }
+
+                    //try
+                    //{
+                    //    cmd.Parameters.AddWithValue("@ScreenShot", (object)DBNull.Value).SqlDbType = SqlDbType.Image;
+                    //}
+                    //catch (Exception exScreenSHot)
+                    //{
+                    //    cmd.Parameters.AddWithValue("@ScreenShot", (object)DBNull.Value).SqlDbType = SqlDbType.Image;
+                    //    builder.AppendLine(Environment.NewLine + " screen shot error : " + exScreenSHot.Message);
+                    //}
+
+                    cmd.Parameters.AddWithValue("@ErrorDesc", builder.ToString());
+
+                    cmd.CommandText = "insert into mstErrorLog([ErrorDate],[ErrorMessage],[ErrorDesc],[ComputerName],[ComputerUserName],[StoreProcedure],[DBServerName],[SPLineNumber],[AppVersion],[AppStartupPath],[IsSent]) " +
+                                        " values(getdate(),@ErrorMessage,@ErrorDesc,@ComputerName,@ComputerUserName,@StoreProcedure,@DBServerName,@SPLineNumber,@AppVersion,@AppStartupPath,0)";
+
+                    try
+                    {
+                        BaseSQLManager.ExecuteNonQuery(cmd);
+                    }
+                    catch (Exception exxxx)
+                    {
+
+                    }
+
+                    StreamWriter writer = null;
+                    try
+                    {
+
+                        string FileName = "Error_" + DateTime.Now.ToString("dd_MM_yyyy") + ".txt";
+                        string DailyErrorPath = ErrorLogDirectory + "\\DailyErrorLog\\";
+                        System.IO.Directory.CreateDirectory(DailyErrorPath);
+
+                        writer = new StreamWriter(DailyErrorPath + "" + FileName, true);
+                        writer.WriteLine(DateTime.Now.ToString() + ":---------------");
+                        writer.Write(builder.ToString());
+                        writer.WriteLine("");
+                        writer.WriteLine("DatabaseName :" + BaseSQLManager.InitialCatalog);
+                        writer.WriteLine("UserID :" + BaseSQLManager.UserID);
+                        writer.WriteLine("URL :" + AppServicesHelper.HttpContext_Current.Request.Path);
+                        writer.WriteLine("");
+                        writer.WriteLine("");
+                        writer.WriteLine("-----------------------------------------------------------------------------------------------");
+                        writer.WriteLine("");
+                        writer.WriteLine("");
+
+
+                    }
+                    catch (Exception exxxx)
+                    {
+
+                    }
+                    finally
+                    {
+                        if (writer != null)
+                        {
+                            writer.Close();
+                            writer.Dispose();
+                        }
+                    }
+                }
+                catch (Exception exx)
+                {
+                    StreamWriter writer = default(StreamWriter);
+                    string FileName = "Error_" + DateTime.Now.ToString("dd_MM_yyyy_hh_mm_ssss_tt") + new Random().Next(1, 10000).ToString() + ".txt";
+                    writer = new StreamWriter(ErrorLogDirectory + FileName, true);
+
+                    writer.Write(builder.ToString());
+                    writer.WriteLine("");
+                    writer.WriteLine("DatabaseName :" + BaseSQLManager.InitialCatalog);
+                    writer.WriteLine("UserID :" + BaseSQLManager.UserID);
+                    writer.WriteLine("/*******  Error on write error in database : " + exx.Message + "*********/");
+                    writer.Close();
+                    writer.Dispose();
+                }
+                //BackgroundWorker bgEmailSender = new BackgroundWorker();
+                //bgEmailSender.DoWork += bgEmailSender_DoWork;
+                //bgEmailSender.RunWorkerAsync(builder.ToString().Replace(Environment.NewLine, "<br>"));
+                //SoftwareRegistration.MixMethods.AddSoftwareExceptionLog(builder.ToString());
+            }
+            catch (Exception exxxxx)
+            {
+                Debug.Write(exxxxx.Message);
+            }
+            finally
+            {
+
+            }
+        }
+        #endregion
+
+        #region WriteSQLExeception
+        public static void WriteSQLExeception(ref StringBuilder builder, SqlException exSQL)
+        {
+            builder.AppendLine("Store Procedure : " + exSQL.Procedure);
+            builder.AppendLine("Server          : " + exSQL.Server);
+            builder.AppendLine("LineNumber      : " + exSQL.LineNumber);
+
+            if (UtilityWS.htException.Contains(exSQL))
+            {
+                SqlCommand cmd = UtilityWS.htException[exSQL] as SqlCommand;
+                //BaseSQLManager.htException.Remove(exSQL);
+                if (cmd != null)
+                {
+                    if (cmd.Connection != null)
+                    {
+                        builder.AppendLine("DataBase        : " + cmd.Connection.Database);
+                    }
+                    builder.AppendLine("CommandText      : " + cmd.CommandText);
+                    string SQLQueryWithParamter = "";
+
+                    if (cmd.Parameters.Count > 0)
+                    {
+                        builder.AppendLine("***** Parameters *********");
+                        foreach (SqlParameter sp in cmd.Parameters)
+                        {
+                            try
+                            {
+                                if (sp.ParameterName != "@return")
+                                {
+                                    SQLQueryWithParamter += (SQLQueryWithParamter == "") ? "" : ",";
+
+                                    if (sp.Value is DateTime && sp.Value != null && UtilityWS.IsDate(sp.Value))
+                                        SQLQueryWithParamter += sp.ParameterName + "= '" + UtilityWS.ConvertToDateTime(sp.Value).ToString("MM/dd/yyyy HH:mm:ss") + "'";
+                                    else
+                                        SQLQueryWithParamter += sp.ParameterName + "= '" + (Convert.ToString(sp.Value) == "\0" ? "" : Convert.ToString(sp.Value)) + "'";
+
+                                    //builder.AppendLine(string.Format("{0} = {1}", sp.ParameterName, (Convert.ToString(sp.Value) == "\0" ? "" : Convert.ToString(sp.Value))));
+                                }
+                            }
+                            catch (Exception exxx)
+                            { }
+                        }
+                        builder.AppendLine(SQLQueryWithParamter);
+                        builder.AppendLine("******************");
+                    }
+                }
+            }
+        }
+        #endregion
+    }
+}
