@@ -1,0 +1,597 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Core;
+using Entity.Dto;
+using Entity.Transaction;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileProviders;
+//using SixLabors.ImageSharp;
+//using SixLabors.ImageSharp.Formats.Jpeg;
+//using SixLabors.ImageSharp.PixelFormats;
+//using SixLabors.ImageSharp.Processing;
+
+
+namespace GarmentDealB2B.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class FileController : AlpControllerBase
+    {
+        #region GlobalVeriables
+        private readonly IFileProvider _fileProvider;
+        #endregion
+
+        #region FileController
+        public FileController(IFileProvider fileProvider)
+        {
+            _fileProvider = fileProvider;
+        }
+        #endregion
+
+        #region Upload
+        [Authorize(UserTypes.API)]
+        [HttpPost("Upload")]
+        public async Task<UploadFileResult> Upload([FromForm] IFormFile file)
+        {
+            UploadFileResult result = new UploadFileResult();
+            try
+            {
+                if (file != null)
+                {
+                    string fName = Guid.NewGuid() + System.IO.Path.GetExtension(file.FileName);
+                    string path = Core.StaticResource.TempUploadPath + fName;
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+
+                    using (var stream = new FileStream(path, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+                    result.FileName = fName;
+                }
+            }
+            catch (Exception ex)
+            {
+                Core.UtilityWS.HandleError(result, ex, "UploadFile");
+            }
+            return result;
+        }
+        #endregion
+
+        [Authorize(UserTypes.API)]
+        [HttpPost("MoveImage")]
+        public IActionResult MoveImage(trnImageUpload input)
+        {
+            CommonResult result = new CommonResult();
+            try
+            {
+                string NewPath = "";
+                if (input.ModuleType == "trnStock")
+                    NewPath = VendorImagePath + input.ImageName;
+                else if (input.ModuleType == "mstBrand")
+                    NewPath = BrandImagePath + input.ImageName;
+                else if (input.ModuleType == "mstDepartment")
+                    NewPath = DepartmentImagePath + input.ImageName;
+                else if (input.ModuleType == "mstProduct")
+                    NewPath = ProductImagePath + input.ImageName;
+                else if (input.ModuleType == "mstSubCategory1")
+                    NewPath = SubCategory1ImagePath + input.ImageName;
+                else if (input.ModuleType == "mstCompany")
+                    NewPath = CompanyUPIQRCodeImagePath + input.ImageName;
+                else if (input.ModuleType == "mstCompany")
+                    NewPath = CompanyLogoImagePath + input.ImageName;
+                else if (input.ModuleType == "AppStoryPage")
+                    NewPath = AppStoryImagePath + input.ImageName;
+                else if (input.ModuleType == "mstDesign")
+                    NewPath = DesignImagePath + input.ImageName;
+                else
+                    throw new Exception("Module Type " + input.ModuleType + " not implimented..!!");
+
+
+                if (System.IO.File.Exists(NewPath))
+                    System.IO.File.Delete(NewPath);
+
+                string temppath = Core.StaticResource.TempUploadPath + input.TempImageName;
+                if (!System.IO.File.Exists(temppath))
+                {
+                    throw new Exception("File not found -" + input.TempImageName);
+                }
+                System.IO.File.Move(temppath, NewPath);
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.HandleError(result, ex, "MoveImage");
+            }
+            return GetActionResult(result);
+        }
+
+        #region ResizeImage
+        [Route("/thumb/{width}x{height}/{TimeStamp}/VendorAssets/{VendorID}/{*url}")]
+        public IActionResult ResizeImage(string url, long TimeStamp, int width, int height, long VendorID)
+        {
+            return ResizeImage(url, TimeStamp, width, height, "none", 0, 1, VendorID);
+        }
+        #endregion
+
+
+
+        //#region ResizeImage
+        //[Route("/thumb/{width}x{height}/VendorAssets/{VendorID}/{*url}")]
+        //public IActionResult ResizeImage(string url, int width, int height, long VendorID)
+        //{
+        //    return ResizeImage(url,0, width, height, "none", 0, 1, VendorID);
+        //}
+        //#endregion
+
+
+
+        #region ResizeImage
+        [Route("/thumb/download/{SKUID}/{DataVersion}/{SKUType}/{width}x{height}/VendorAssets/{VendorID}/{*url}")]
+        public IActionResult ResizeImage(string url, long TimeStamp, int width, int height, string type, long SKUID, int DataVersion, long VendorID, string SKUType = "")
+        {
+            // Preconditions and sanitsation 
+            // Check the original image exists
+            url = $"/VendorAssets/{VendorID}/{url}";
+            var originalPath = PathString.FromUriComponent("/" + url);
+            var fileInfo = _fileProvider.GetFileInfo(originalPath);
+            if (!fileInfo.Exists) { return NotFound(); }
+
+            string resizedPath = "";
+            // Replace the extension on the file (we only resize to jpg currently) 
+            if (type != "none")
+                resizedPath = ReplaceExtension($"/thumb/download/{SKUID}/{DataVersion}/{width}x{height}/{TimeStamp}/{url}");
+            else
+                resizedPath = ReplaceExtension($"/thumb/{width}x{height}/{TimeStamp}/{url}");
+
+            // Use the IFileProvider to get an IFileInfo
+            var resizedInfo = _fileProvider.GetFileInfo(resizedPath);
+            // Create the destination folder tree if it doesn't already exist
+            Directory.CreateDirectory(Path.GetDirectoryName(resizedInfo.PhysicalPath));
+
+            using (FileStream stream = new FileStream(fileInfo.PhysicalPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (Bitmap img1 = new Bitmap(stream))
+                {
+                    Bitmap imgResized = GetResizedImage(img1, width, height, true);
+                    if (SKUID > 0)
+                    {
+                        WaterMark objWaterMark = new WaterMark($"/VendorAssets/{VendorID}/", "TAGSHARE", _fileProvider);
+                        objWaterMark.BeforeCreateWatermark += ObjWaterMark_BeforeCreateWatermark;
+                        objWaterMark.Tag = SKUID;
+                        objWaterMark.Tag2 = VendorID;
+                        objWaterMark.Tag3 = SKUType;
+                        objWaterMark.CreateImage(imgResized);
+                    }
+
+                    SaveDecreaseImageQuality(resizedInfo.PhysicalPath, imgResized, 80);
+                    imgResized.Dispose();
+                }
+            }
+
+
+            //// resize the image and save it to the output stream
+            //using (var outputStream = new FileStream(resizedInfo.PhysicalPath, FileMode.CreateNew))
+            //using (var inputStream = fileInfo.CreateReadStream())
+            //using (var image = Image.FromStream(inputStream))
+            //{
+            //    if (width > 0 || height > 0)
+            //    {
+            //        if ((image.Width > width && width > 0) || (image.Height > height && height > 0))
+            //        {
+            //            image.Mutate(x => x.Resize(width, height));
+            //        }
+            //    }
+
+            //    JpegEncoder encoder = new JpegEncoder();
+            //    if (width > 0 || height > 0)
+            //        encoder.Quality = 80;
+            //    else
+            //        encoder.Quality = 80;
+
+            //    image.SaveAsJpeg(outputStream, encoder);
+            //}
+            return PhysicalFile(resizedInfo.PhysicalPath, "image/jpg");
+        }
+        #endregion
+
+        #region SaveWatermarkFile
+        [Authorize(UserTypes.API)]
+        [HttpPost("SaveWatermarkFile")]
+        public IActionResult SaveWatermarkFile(Entity.WatermarkEntity input)
+        {
+            CommonResult result = new CommonResult();
+
+            try
+            {
+                string tempSetttingFileName = Core.StaticResource.TempUploadPath + input.tempSetttingFileName;
+                if (!System.IO.File.Exists(tempSetttingFileName))
+                {
+                    throw new Exception("File not found -" + tempSetttingFileName);
+                }
+                else
+                {
+                    var fileInfo = _fileProvider.GetFileInfo(tempSetttingFileName);
+
+                    string NewPath = WatermarkSettingPath + input.SetttingFileName;
+                    if (System.IO.File.Exists(NewPath))
+                        System.IO.File.Delete(NewPath);
+
+                    System.IO.File.Move(tempSetttingFileName, NewPath);
+
+                    if (!string.IsNullOrWhiteSpace(input.tempLogoFileName))
+                    {
+                        string tempLogoFileName = Core.StaticResource.TempUploadPath + input.tempLogoFileName;
+
+                        NewPath = WatermarkSettingPath + input.LogoFileName;
+                        if (System.IO.File.Exists(NewPath))
+                            System.IO.File.Delete(NewPath);
+
+                        System.IO.File.Move(tempLogoFileName, NewPath);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(input.tempWatermarkFileName))
+                    {
+                        string tempWatermarkFileName = Core.StaticResource.TempUploadPath + input.tempWatermarkFileName;
+
+                        NewPath = WatermarkSettingPath + input.WatermarkFileName;
+                        if (System.IO.File.Exists(NewPath))
+                            System.IO.File.Delete(NewPath);
+
+                        System.IO.File.Move(tempWatermarkFileName, NewPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                UtilityWS.HandleError(result, ex, "SaveWatermarkFile");
+            }
+            return GetActionResult(result);
+        }
+        #endregion
+
+        #region ObjWaterMark_BeforeCreateWatermark
+        private void ObjWaterMark_BeforeCreateWatermark(object sender, CreateWatermarkeventArg e)
+        {
+            if (!string.IsNullOrWhiteSpace(e.WaterMarkText))
+            {
+                WaterMark waterMark = sender as WaterMark;
+                Int64 SKUID = (Int64)waterMark.Tag;
+                Int64 VendorID = (Int64)waterMark.Tag2;
+                string SKUType = (string)waterMark.Tag3;
+
+                List<trnSKUTagEntity> tag = DAL.Transaction.trnSKUSQL.GetSKUTag(VendorID, 0, SKUID, SKUType, 0);
+                if (tag.Count > 0)
+                {
+                    if (SKUType == "D")
+                        e.WaterMarkText = e.WaterMarkText.Replace("[TagDesc]", "DesignNo");
+                    else
+                        e.WaterMarkText = e.WaterMarkText.Replace("[TagDesc]", "TagNo");
+                    e.WaterMarkText = Core.UtilityWS.ReplaceText(e.WaterMarkText, tag[0]);
+                }
+            }
+        }
+        #endregion
+
+        #region SaveDecreaseImageQuality
+        /// <summary>
+        /// Saves image with decrease  quality.
+        /// </summary>
+        /// <param name="path">The path.</param>
+        /// <param name="img">The img.</param>
+        /// <param name="quality">The quality.</param>
+        /// <exception cref="ArgumentOutOfRangeException">quality must be between 0 and 100.</exception>
+        public static void SaveDecreaseImageQuality(string path, Image img, int quality)
+        {
+            if (quality < 0 || quality > 100)
+                throw new ArgumentOutOfRangeException("quality must be between 0 and 100.");
+
+            // Encoder parameter for image quality 
+            EncoderParameter qualityParam = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+            // JPEG image codec 
+            ImageCodecInfo jpegCodec = GetEncoderInfo("image/jpeg");
+            EncoderParameters encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = qualityParam;
+            img.Save(path, jpegCodec, encoderParams);
+        }
+        #endregion
+
+        #region GetEncoderInfo
+        /// <summary>
+        /// Gets the encoder information.
+        /// </summary>
+        /// <param name="MimeType">Type of the MIME.</param>
+        /// <returns>System.Drawing.Imaging.ImageCodecInfo.</returns>
+        public static System.Drawing.Imaging.ImageCodecInfo GetEncoderInfo(string MimeType)
+        {
+            int j;
+            System.Drawing.Imaging.ImageCodecInfo[] ancoders;
+            ancoders = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders();
+            j = 0;
+            for (j = 0; j <= ancoders.Length - 1; j++)
+            {
+                if (ancoders[j].MimeType == MimeType)
+                {
+                    return ancoders[j];
+                }
+
+            }
+            return null;
+        }
+        #endregion
+
+
+        #region GetResizedImage
+        public static Bitmap GetResizedImage(Bitmap imgIn, int width, int height, bool AddWhite = false)
+        {
+            if (width == 0 && height == 0)
+            {
+                width = imgIn.Width;
+                height = imgIn.Height;
+            }
+            else if (width == -1 && height == -1)
+            {
+                return imgIn;
+            }
+            if (width > imgIn.Width)
+                width = imgIn.Width;
+
+            if (height > imgIn.Height)
+                height = imgIn.Height;
+
+
+            double y = imgIn.Height;
+            double x = imgIn.Width;
+
+            double factor = 1;
+            if (width > 0)
+            {
+                factor = width / x;
+            }
+            else if (height > 0)
+            {
+                factor = height / y;
+            }
+            //System.IO.MemoryStream outStream = new System.IO.MemoryStream();
+            Bitmap imgOut = new Bitmap((int)(x * factor), (int)(y * factor));
+
+            // Set DPI of image (xDpi, yDpi)
+            //imgOut.SetResolution(72, 72);
+            imgOut.SetResolution(imgIn.HorizontalResolution, imgIn.VerticalResolution);
+
+            Graphics g = Graphics.FromImage(imgOut);
+            if (AddWhite)
+                g.Clear(Color.White);
+
+            g.DrawImage(imgIn, new Rectangle(0, 0, (int)(factor * x), (int)(factor * y)),
+              new Rectangle(0, 0, (int)x, (int)y), GraphicsUnit.Pixel);
+
+            imgIn.Dispose();
+            imgIn = null;
+            g.Dispose();
+
+            //imgOut.Save(outStream, getImageFormat(path));
+            return imgOut;
+        }
+        #endregion
+
+        #region getImageFormat
+        ImageFormat getImageFormat(String path)
+        {
+            switch (Path.GetExtension(path))
+            {
+                case ".bmp": return ImageFormat.Bmp;
+                case ".gif": return ImageFormat.Gif;
+                case ".jpg": return ImageFormat.Jpeg;
+                case ".png": return ImageFormat.Png;
+                default: break;
+            }
+            return ImageFormat.Jpeg;
+        }
+        #endregion
+
+        #region ReplaceExtension
+        private static string ReplaceExtension(string wwwRelativePath)
+        {
+            return Path.Combine(
+                Path.GetDirectoryName(wwwRelativePath),
+                Path.GetFileNameWithoutExtension(wwwRelativePath)) + ".jpg";
+        }
+        #endregion
+
+        [Route("/DeleteUnusedFiles")]
+        [HttpPost("DeleteUnusedFiles")]
+        public string DeleteUnusedFiles()
+        {
+            string SourcePath = "";
+            string DestinationPath = "";
+            try
+            {
+                int DeleteCount = 0;
+                Hashtable htImages = DAL.Transaction.trnSKUSQL.GetAllSKUImages();
+
+                string url = $"/VendorAssets/";
+                var originalPath = PathString.FromUriComponent("/" + url);
+                var fileInfo = _fileProvider.GetFileInfo(originalPath);
+
+                string destination = Path.Combine(Core.StaticResource.BaseDirectory, "VendorAssets\\SKUImageBackup\\");
+                System.IO.Directory.CreateDirectory(destination);
+
+                foreach (IFileInfo fin in _fileProvider.GetDirectoryContents(originalPath))
+                {
+                    if (fin.IsDirectory)
+                    {
+                        foreach (DirectoryInfo fin2 in new System.IO.DirectoryInfo(fin.PhysicalPath).GetDirectories())
+                        {
+                            if (fin2.Name == "SKUImages")
+                            {
+                                string[] types = { "*.jpg", "*.mp4" };
+                                foreach (string t in types)
+                                {
+                                    FileInfo[] Files = new System.IO.DirectoryInfo(fin2.FullName).GetFiles(t, SearchOption.AllDirectories);
+                                    foreach (FileInfo f in Files)
+                                    {
+                                        string filename = System.IO.Path.GetFileName(f.FullName).ToLower();
+                                        if (!htImages.Contains(filename))
+                                        {
+                                            string NewPath = f.FullName.Replace(@"VendorAssets", @"VendorAssets\SKUImageBackup");
+                                            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(NewPath));
+
+                                            SourcePath = f.FullName;
+                                            DestinationPath = NewPath;
+                                            f.MoveTo(NewPath);
+                                            DeleteCount += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return "done - " + DeleteCount.ToString();
+            }
+            catch (Exception ex)
+            {
+                ErrorMgmt.AddError(ex, "DeleteUnusedFiles");
+                return ex.Message + Environment.NewLine + "Source :" + SourcePath + Environment.NewLine + "Destination :" + DestinationPath + Environment.NewLine + ex.StackTrace.ToString();
+            }
+
+        }
+
+
+        #region ResizeImageCatelog
+        [Route("/thumb/{width}x{height}/{TimeStamp}/VendorAssets/{VendorID}/CatelogPage/{*url}")]
+        [HttpGet]
+        public IActionResult ResizeImageCatelog(string url, long TimeStamp, int width, int height, long VendorID)
+        {
+            return ResizeImageCatelog(url, TimeStamp, width, height, "none", 0, 1, VendorID);
+        }
+        #endregion
+
+        #region ResizeImageCatelog
+        [Route("/thumb/{width}x{height}/VendorAssets/{VendorID}/CatelogPage/{*url}")]
+        public IActionResult ResizeImageCatelog(string url, long TimeStamp, int width, int height, string type, long SKUID, int DataVersion, long VendorID, string SKUType = "")
+        {
+            // Preconditions and sanitsation 
+            // Check the original image exists
+            url = $"/VendorAssets/{VendorID}/CatelogPage/{url}";
+            type = "none";
+            var originalPath = PathString.FromUriComponent("/" + url);
+            var fileInfo = _fileProvider.GetFileInfo(originalPath);
+            if (!fileInfo.Exists) { return NotFound(); }
+
+            string resizedPath = "";
+            // Replace the extension on the file (we only resize to jpg currently) 
+            if (type != "none")
+                resizedPath = ReplaceExtension($"/thumb/download/{SKUID}/{DataVersion}/{width}x{height}/{TimeStamp}/{url}");
+            else
+                resizedPath = ReplaceExtension($"/thumb/{width}x{height}/{TimeStamp}/{url}");
+
+            // Use the IFileProvider to get an IFileInfo
+            var resizedInfo = _fileProvider.GetFileInfo(resizedPath);
+            // Create the destination folder tree if it doesn't already exist
+            Directory.CreateDirectory(Path.GetDirectoryName(resizedInfo.PhysicalPath));
+
+            using (FileStream stream = new FileStream(fileInfo.PhysicalPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (Bitmap img1 = new Bitmap(stream))
+                {
+                    Bitmap imgResized = GetResizedImage(img1, width, height, true);
+                    //WaterMark objWaterMark = new WaterMark($"/VendorAssets/{VendorID}/", "TAGSHARE", _fileProvider);
+                    //objWaterMark.BeforeCreateWatermark += ObjWaterMark_BeforeCreateWatermark;
+
+                    //objWaterMark.Tag2 = VendorID;
+
+                    //objWaterMark.CreateImage(imgResized);
+
+                    SaveDecreaseImageQuality(resizedInfo.PhysicalPath, imgResized, 80);
+                    imgResized.Dispose();
+                }
+            }
+
+
+
+            return PhysicalFile(resizedInfo.PhysicalPath, "image/jpg");
+        }
+        #endregion
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #region ResizeImageOrderItem
+        [Route("/thumb/{width}x{height}/{TimeStamp}/VendorAssets/{VendorID}/OrderItemImage/{*url}")]
+        [HttpGet]
+        public IActionResult ResizeImageOrderItem(string url, long TimeStamp, int width, int height, long VendorID)
+        {
+
+            return ResizeImageOrderItem(url, TimeStamp, width, height, "none", 0, 1, VendorID);
+        }
+        #endregion
+
+        #region ResizeImageOrderItem
+        [Route("/thumb/{width}x{height}/VendorAssets/{VendorID}/OrderItemImage/{*url}")]
+        public IActionResult ResizeImageOrderItem(string url, long TimeStamp, int width, int height, string type, long SKUID, int DataVersion, long VendorID, string SKUType = "")
+        {
+            // Preconditions and sanitsation 
+            // Check the original image exists
+
+            //url = $"/VendorAssets/{VendorID}/OrderItemImage/{url}";
+            //type = "none";
+            //string url1 = $"/OrderItemImage/{VendorID}/{image}";
+            url = $"/VendorAssets/{VendorID}/OrderItemImage/{url}";
+            var originalPath = PathString.FromUriComponent("/" + url);
+            var fileInfo = _fileProvider.GetFileInfo(originalPath);
+            if (!fileInfo.Exists) { return NotFound(); }
+
+            string resizedPath = "";
+            // Replace the extension on the file (we only resize to jpg currently) 
+            if (type != "none")
+                resizedPath = ReplaceExtension($"/thumb/download/{SKUID}/{DataVersion}/{width}x{height}/{TimeStamp}/{url}");
+            else
+                resizedPath = ReplaceExtension($"/thumb/{width}x{height}/{url}");
+
+            // Use the IFileProvider to get an IFileInfo
+            var resizedInfo = _fileProvider.GetFileInfo(resizedPath);
+            // Create the destination folder tree if it doesn't already exist
+            Directory.CreateDirectory(Path.GetDirectoryName(resizedInfo.PhysicalPath));
+
+            using (FileStream stream = new FileStream(fileInfo.PhysicalPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (Bitmap img1 = new Bitmap(stream))
+                {
+                    Bitmap imgResized = GetResizedImage(img1, width, height, true);
+
+                    //WaterMark objWaterMark = new WaterMark($"/VendorAssets/{VendorID}/", "TAGSHARE", _fileProvider);
+                    //objWaterMark.BeforeCreateWatermark += ObjWaterMark_BeforeCreateWatermark;
+                    //objWaterMark.Tag2 = VendorID;
+                    //objWaterMark.CreateImage(imgResized);
+                    SaveDecreaseImageQuality(resizedInfo.PhysicalPath, imgResized, 80);
+                    imgResized.Dispose();
+                }
+            }
+
+
+
+            return PhysicalFile(resizedInfo.PhysicalPath, "image/jpg");
+        }
+        #endregion
+
+    }
+}
